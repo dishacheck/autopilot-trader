@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autopilot Options Trader — Nifty & BankNifty</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2535;
+    --card: #1a2030;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8eaf0;
+    --text2: #8b92a5;
+    --text3: #5a6177;
+    --green: #22c55e;
+    --green2: #16a34a;
+    --green-bg: rgba(34,197,94,0.1);
+    --green-border: rgba(34,197,94,0.3);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.1);
+    --red-border: rgba(239,68,68,0.3);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.1);
+    --amber-border: rgba(245,158,11,0.3);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,0.1);
+    --blue-border: rgba(59,130,246,0.3);
+    --purple: #8b5cf6;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* LAYOUT */
+  .app { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 56px 1fr; min-height: 100vh; }
+  .topbar { grid-column: 1 / -1; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+  .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 16px 12px; }
+  .main { overflow-y: auto; padding: 20px; background: var(--bg); }
+
+  /* TOPBAR */
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #22c55e, #3b82f6); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-size: 15px; font-weight: 700; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--text2); }
+  .topbar-center { display: flex; gap: 24px; }
+  .idx-pill { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; }
+  .idx-name { font-size: 11px; color: var(--text2); font-weight: 600; letter-spacing: 0.05em; }
+  .idx-price { font-size: 15px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .idx-chg { font-size: 11px; font-weight: 500; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+  .clock { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); background: var(--bg3); padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); }
+  .mode-badge { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; cursor: pointer; transition: all .2s; }
+  .paper-mode { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .live-mode { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+
+  /* SIDEBAR */
+  .nav-section { margin-bottom: 20px; }
+  .nav-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; padding: 0 8px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; color: var(--text2); transition: all .15s; margin-bottom: 2px; text-decoration: none; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+  .nav-badge { margin-left: auto; font-size: 10px; font-weight: 600; background: var(--green-bg); color: var(--green); padding: 2px 7px; border-radius: 10px; }
+
+  /* PAGES */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card-title .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* GRID LAYOUTS */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 14px; }
+  .grid5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 14px; }
+
+  /* METRIC CARDS */
+  .metric { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .metric-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+  .metric-val { font-size: 20px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .metric-sub { font-size: 11px; margin-top: 3px; }
+
+  /* SIGNAL CARDS */
+  .signal-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; transition: border-color .2s; }
+  .signal-card.fire { border-color: var(--green-border); }
+  .signal-card.wait { border-color: var(--amber-border); }
+  .signal-card.blocked { border-color: var(--border); opacity: .6; }
+  .signal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .sig-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .sig-icon-g { background: var(--green-bg); }
+  .sig-icon-r { background: var(--red-bg); }
+  .sig-icon-a { background: var(--amber-bg); }
+  .sig-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .sig-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .prob-big { font-size: 24px; font-weight: 700; margin-left: auto; }
+
+  /* LEVELS GRID */
+  .levels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+  .level { border-radius: var(--radius-sm); padding: 8px 10px; text-align: center; }
+  .level-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .level-val { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .level-sub { font-size: 10px; margin-top: 2px; }
+  .lv-entry { background: var(--blue-bg); border: 1px solid var(--blue-border); }
+  .lv-entry .level-label, .lv-entry .level-sub { color: rgba(59,130,246,0.7); }
+  .lv-entry .level-val { color: var(--blue); }
+  .lv-sl { background: var(--red-bg); border: 1px solid var(--red-border); }
+  .lv-sl .level-label, .lv-sl .level-sub { color: rgba(239,68,68,0.7); }
+  .lv-sl .level-val { color: var(--red); }
+  .lv-t1 { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); }
+  .lv-t1 .level-label, .lv-t1 .level-sub { color: rgba(34,197,94,0.6); }
+  .lv-t1 .level-val { color: #86efac; }
+  .lv-t2 { background: var(--green-bg); border: 1px solid var(--green-border); }
+  .lv-t2 .level-label, .lv-t2 .level-sub { color: rgba(34,197,94,0.7); }
+  .lv-t2 .level-val { color: var(--green); }
+  .lv-ltp { background: var(--bg3); border: 1px solid var(--border2); }
+  .lv-ltp .level-label { color: var(--text3); }
+  .lv-ltp .level-val { color: var(--text); }
+
+  /* PROGRESS BAR */
+  .prog-wrap { margin-bottom: 10px; }
+  .prog-labels { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; }
+  .prog-track { height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+  .prog-fill { height: 8px; border-radius: 4px; transition: width .5s ease, background .3s; }
+
+  /* TAGS */
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .tag { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 10px; }
+  .tag-g { background: var(--green-bg); color: #86efac; border: 1px solid var(--green-border); }
+  .tag-r { background: var(--red-bg); color: #fca5a5; border: 1px solid var(--red-border); }
+  .tag-b { background: var(--blue-bg); color: #93c5fd; border: 1px solid var(--blue-border); }
+  .tag-a { background: var(--amber-bg); color: #fcd34d; border: 1px solid var(--amber-border); }
+  .tag-p { background: rgba(139,92,246,0.1); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+
+  /* BUTTONS */
+  .btn { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all .15s; }
+  .btn-green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .btn-green:hover { background: rgba(34,197,94,0.2); }
+  .btn-red { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+  .btn-red:hover { background: rgba(239,68,68,0.2); }
+  .btn-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+  .btn-amber:hover { background: rgba(245,158,11,0.2); }
+  .btn-blue { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+  .btn-blue:hover { background: rgba(59,130,246,0.2); }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn-row .btn { flex: 1; }
+
+  /* PNL ROW */
+  .pnl-row { display: flex; align-items: center; justify-content: space-between; background: var(--bg3); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 8px; }
+  .pnl-label { font-size: 12px; color: var(--text2); }
+  .pnl-val { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+  /* OI TABLE */
+  .oi-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .oi-table th { padding: 7px 10px; text-align: left; color: var(--text3); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  .oi-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .oi-table tr:last-child td { border-bottom: none; }
+  .oi-table tr.atm-row td { background: var(--amber-bg); }
+  .call-col { color: var(--blue); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .put-col { color: var(--green); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .strike-col { text-align: center; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+
+  /* LOG */
+  .log-entry { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time { font-family: 'JetBrains Mono', monospace; color: var(--text3); min-width: 44px; font-size: 11px; padding-top: 1px; }
+  .log-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .log-text { color: var(--text); line-height: 1.4; flex: 1; }
+
+  /* INDEX TAB SWITCHER */
+  .tab-row { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab-btn { padding: 7px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--bg3); color: var(--text2); transition: all .15s; }
+  .tab-btn.active-nf { background: var(--blue-bg); color: var(--blue); border-color: var(--blue-border); }
+  .tab-btn.active-bn { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+  .tab-panel { display: none; }
+  .tab-panel.visible { display: block; }
+
+  /* SCORE RING */
+  .score-section { display: flex; align-items: center; gap: 20px; background: var(--bg3); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px; }
+  .score-ring { position: relative; width: 70px; height: 70px; flex-shrink: 0; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .score-num { font-size: 18px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .score-label { font-size: 9px; color: var(--text3); }
+  .score-detail { flex: 1; }
+  .score-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .score-sub { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .score-verdict { font-size: 12px; font-weight: 600; padding: 4px 14px; border-radius: 20px; }
+
+  /* WINDOW TIMELINE */
+  .window-bar { margin-bottom: 14px; }
+  .window-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-bottom: 5px; }
+  .window-track { height: 12px; background: var(--bg3); border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .window-fill { height: 12px; border-radius: 6px; transition: width 1s; }
+
+  /* STATS */
+  .stat-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-key { font-size: 12px; color: var(--text2); }
+  .stat-val { font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .mini-bar { height: 4px; background: var(--bg3); border-radius: 2px; width: 80px; }
+  .mini-fill { height: 4px; border-radius: 2px; }
+
+  /* FII CARD */
+  .fii-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+  /* WARN BOX */
+  .warn-box { background: var(--amber-bg); border: 1px solid var(--amber-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #fcd34d; line-height: 1.6; }
+  .info-box { background: var(--blue-bg); border: 1px solid var(--blue-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #93c5fd; line-height: 1.6; }
+  .success-box { background: var(--green-bg); border: 1px solid var(--green-border); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px; font-size: 12px; color: #86efac; line-height: 1.6; }
+
+  /* SETTINGS */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-info { flex: 1; }
+  .setting-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .setting-desc { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  input[type=range] { accent-color: var(--blue); }
+  input[type=number], input[type=text], select { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius-sm); color: var(--text); padding: 6px 10px; font-size: 13px; font-family: inherit; outline: none; }
+  input[type=number]:focus, input[type=text]:focus, select:focus { border-color: var(--blue); }
+  .toggle { width: 44px; height: 24px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 12px; position: relative; cursor: pointer; transition: background .2s; }
+  .toggle.on { background: var(--green2); border-color: var(--green2); }
+  .toggle-thumb { width: 18px; height: 18px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: left .2s; }
+  .toggle.on .toggle-thumb { left: 22px; }
+
+  /* CHART CONTAINER */
+  .chart-wrap { position: relative; height: 200px; margin-top: 10px; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; } 
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+  /* PAGE HEADER */
+  .page-header { margin-bottom: 18px; }
+  .page-title { font-size: 20px; font-weight: 700; color: var(--text); }
+  .page-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+
+  /* EXITED STATE */
+  .signal-card.exited { opacity: .55; border-color: var(--border); }
+
+  /* MOBILE */
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr; }
+    .sidebar { display: none; }
+    .topbar-center { display: none; }
+    .grid4, .grid5 { grid-template-columns: repeat(2,1fr); }
+    .levels { grid-template-columns: repeat(3,1fr); }
+    .fii-grid, .grid2, .grid3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <div class="logo-text">AutoPilot Trader</div>
+        <div class="logo-sub">9–11 AM Option Buying</div>
+      </div>
+    </div>
+    <div class="topbar-center">
+      <div class="idx-pill">
+        <span class="idx-name">NIFTY</span>
+        <span class="idx-price up" id="nf-top">24,352</span>
+        <span class="idx-chg up" id="nf-top-chg">▲ +22</span>
+      </div>
+      <div class="idx-pill">
+        <span class="idx-name">BANKNIFTY</span>
+        <span class="idx-price up" id="bn-top">56,083</span>
+        <span class="idx-chg up" id="bn-top-chg">▲ +21</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-dot"></div>
+      <div class="clock" id="top-clock">09:15:00</div>
+      <div class="mode-badge paper-mode" id="mode-badge" onclick="toggleMode()">● PAPER TRADE</div>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Dashboard</div>
+      <a class="nav-item active" onclick="showPage('dashboard')">
+        <span class="nav-icon">📊</span> Dashboard
+        <span class="nav-badge" id="signal-count-badge">2</span>
+      </a>
+      <a class="nav-item" onclick="showPage('signals')">
+        <span class="nav-icon">⚡</span> Live Signals
+      </a>
+      <a class="nav-item" onclick="showPage('trades')">
+        <span class="nav-icon">📋</span> Paper Trades
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Analysis</div>
+      <a class="nav-item" onclick="showPage('oi')">
+        <span class="nav-icon">📈</span> OI Analysis
+      </a>
+      <a class="nav-item" onclick="showPage('fii')">
+        <span class="nav-icon">🏦</span> FII & Pro Data
+      </a>
+      <a class="nav-item" onclick="showPage('probability')">
+        <span class="nav-icon">🎯</span> Probability Engine
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <a class="nav-item" onclick="showPage('history')">
+        <span class="nav-icon">📜</span> Trade History
+      </a>
+      <a class="nav-item" onclick="showPage('settings')">
+        <span class="nav-icon">⚙️</span> Settings
+      </a>
+    </div>
+    <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);text-align:center;line-height:1.6">
+        Paper trading only<br>No real money at risk
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">7 May 2026 · 9–11 AM intraday option buying window</div>
+      </div>
+
+      <!-- Window progress -->
+      <div class="window-bar">
+        <div class="window-labels">
+          <span>9:00 AM — Open</span>
+          <span id="window-pct-lbl" style="color:var(--green);font-weight:600">0% elapsed</span>
+          <span id="window-status-lbl" style="color:var(--green);font-weight:600">Window OPEN</span>
+          <span>11:00 AM — Hard exit</span>
+        </div>
+        <div class="window-track">
+          <div class="window-fill" id="window-fill" style="width:0%;background:var(--green)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:3px">
+          <span>Best entry: 9:15–9:45</span><span style="color:var(--amber)">Caution: 10:30+</span><span style="color:var(--red)">Exit only: 10:45+</span>
+        </div>
+      </div>
+
+      <!-- Top metrics -->
+      <div class="grid5">
+        <div class="metric">
+          <div class="metric-label">Today P&L</div>
+          <div class="metric-val" id="dash-pnl" style="color:var(--green)">+₹0</div>
+          <div class="metric-sub" style="color:var(--text2)">Paper trades</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Active Trades</div>
+          <div class="metric-val" id="dash-active">2</div>
+          <div class="metric-sub" style="color:var(--text2)">Max 2 today</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Signals Fired</div>
+          <div class="metric-val" id="dash-signals">2</div>
+          <div class="metric-sub" style="color:var(--green)">Above 70%</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Nifty Bias</div>
+          <div class="metric-val" style="color:var(--green);font-size:16px">BULLISH</div>
+          <div class="metric-sub" style="color:var(--green)">PCR 1.24</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">BNifty Bias</div>
+          <div class="metric-val" style="color:var(--green);font-size:16px">BULLISH</div>
+          <div class="metric-sub" style="color:var(--green)">PCR 1.18</div>
+        </div>
+      </div>
+
+      <!-- Live trades summary -->
+      <div class="grid2">
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--blue)"></span>NIFTY 24,400 CE · 78% probability</div>
+          <div class="levels">
+            <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹85</div><div class="level-sub">Bought</div></div>
+            <div class="level lv-sl"><div class="level-label">SL</div><div class="level-val">₹60</div><div class="level-sub">-30%</div></div>
+            <div class="level lv-t1"><div class="level-label">T1</div><div class="level-val">₹119</div><div class="level-sub">+40%</div></div>
+            <div class="level lv-t2"><div class="level-label">T2</div><div class="level-val">₹153</div><div class="level-sub">+80%</div></div>
+            <div class="level lv-ltp"><div class="level-label">LTP</div><div class="level-val" id="d-nf-ltp">₹85</div><div class="level-sub" id="d-nf-chg">0%</div></div>
+          </div>
+          <div class="pnl-row"><span class="pnl-label">P&L (50 units)</span><span class="pnl-val" id="d-nf-pnl">+₹0</span></div>
+          <div class="prog-wrap">
+            <div class="prog-track"><div class="prog-fill" id="d-nf-bar" style="width:47%;background:var(--amber)"></div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-red" onclick="manualExit('NF')">Exit Now</button>
+            <button class="btn btn-amber" onclick="trailSL('NF')">Trail SL</button>
+            <button class="btn btn-blue" onclick="showPage('trades')">Details →</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--green)"></span>BANKNIFTY 56,500 CE · 76% probability</div>
+          <div class="levels">
+            <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹320</div><div class="level-sub">Bought</div></div>
+            <div class="level lv-sl"><div class="level-label">SL</div><div class="level-val">₹224</div><div class="level-sub">-30%</div></div>
+            <div class="level lv-t1"><div class="level-label">T1</div><div class="level-val">₹448</div><div class="level-sub">+40%</div></div>
+            <div class="level lv-t2"><div class="level-label">T2</div><div class="level-val">₹576</div><div class="level-sub">+80%</div></div>
+            <div class="level lv-ltp"><div class="level-label">LTP</div><div class="level-val" id="d-bn-ltp">₹320</div><div class="level-sub" id="d-bn-chg">0%</div></div>
+          </div>
+          <div class="pnl-row"><span class="pnl-label">P&L (15 units)</span><span class="pnl-val" id="d-bn-pnl">+₹0</span></div>
+          <div class="prog-wrap">
+            <div class="prog-track"><div class="prog-fill" id="d-bn-bar" style="width:47%;background:var(--amber)"></div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-red" onclick="manualExit('BN')">Exit Now</button>
+            <button class="btn btn-amber" onclick="trailSL('BN')">Trail SL</button>
+            <button class="btn btn-blue" onclick="showPage('trades')">Details →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trade log -->
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--purple)"></span>Trade log — today</div>
+        <div id="dash-log">
+          <div class="log-entry"><div class="log-time">09:15</div><div class="log-dot" style="background:var(--green)"></div><div class="log-text">SIGNAL FIRED — NIFTY 24,400 CE · Paper BUY @ ₹85 · 1 lot (50 units) · Probability 78%</div></div>
+          <div class="log-entry"><div class="log-time">09:15</div><div class="log-dot" style="background:var(--green)"></div><div class="log-text">SIGNAL FIRED — BANKNIFTY 56,500 CE · Paper BUY @ ₹320 · 1 lot (15 units) · Probability 76%</div></div>
+          <div class="log-entry"><div class="log-time">09:15</div><div class="log-dot" style="background:var(--blue)"></div><div class="log-text">SL ARMED — Nifty CE @ ₹60 · BankNifty CE @ ₹224 · Auto-exit if hit</div></div>
+          <div class="log-entry"><div class="log-time">09:15</div><div class="log-dot" style="background:var(--amber)"></div><div class="log-text">MONITORING — Targets: NF T1 ₹119 / T2 ₹153 · BN T1 ₹448 / T2 ₹576 · Hard exit 11:00 AM</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGNALS PAGE -->
+    <div class="page" id="page-signals">
+      <div class="page-header">
+        <div class="page-title">Live Signals</div>
+        <div class="page-sub">Only signals ≥70% probability shown — all others blocked</div>
+      </div>
+
+      <div class="tab-row">
+        <button class="tab-btn active-nf" id="sig-tab-nf" onclick="switchSigTab('nf')">📊 Nifty 50</button>
+        <button class="tab-btn" id="sig-tab-bn" onclick="switchSigTab('bn')">🏦 BankNifty</button>
+      </div>
+
+      <!-- NIFTY SIGNALS -->
+      <div class="tab-panel visible" id="sig-panel-nf">
+        <div class="score-section">
+          <div class="score-ring">
+            <svg width="70" height="70" viewBox="0 0 70 70">
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#1e2535" stroke-width="8"/>
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="123 176" stroke-linecap="round"/>
+            </svg>
+            <div class="score-center"><div class="score-num" style="color:var(--green)">75</div><div class="score-label">/100</div></div>
+          </div>
+          <div class="score-detail">
+            <div class="score-title" style="color:var(--green)">NIFTY — Trade Allowed</div>
+            <div class="score-sub">PCR 1.24, FII net long +6,140 Cr, OI at 24,000 put highest. Gap-up open above VWAP. 5-min bullish candle confirmed at 9:15.</div>
+          </div>
+          <div class="score-verdict tag-g">✓ GO</div>
+        </div>
+
+        <div class="signal-card fire">
+          <div class="signal-header">
+            <div class="sig-icon sig-icon-g">📈</div>
+            <div><div class="sig-name">NIFTY 24,400 CE Buy</div><div class="sig-sub">ATM+1 · 29 May expiry · Lot 50 · ACTIVE</div></div>
+            <div class="prob-big" style="color:var(--green)">78%</div>
+          </div>
+          <div class="levels">
+            <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹85</div><div class="level-sub">Buy here</div></div>
+            <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val">₹60</div><div class="level-sub">-30% = -₹1,250</div></div>
+            <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val">₹119</div><div class="level-sub">+40% = +₹1,700</div></div>
+            <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val">₹153</div><div class="level-sub">+80% = +₹3,400</div></div>
+            <div class="level lv-ltp"><div class="level-label">Live</div><div class="level-val" id="sig-nf-ltp">₹85</div><div class="level-sub" id="sig-nf-chg">0%</div></div>
+          </div>
+          <div class="tags">
+            <span class="tag tag-g">VWAP above</span><span class="tag tag-g">5min higher high</span><span class="tag tag-b">PCR 1.24 bullish</span><span class="tag tag-g">FII long +6,140 Cr</span><span class="tag tag-g">OI: CE writers covering</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6">Gap-up open. Spot 352 pts above max pain (24,000). First 15-min candle bullish above VWAP. OI at 24,400 CE falling = short covering. Book 50% at T1 (₹119) then trail SL to entry.</div>
+        </div>
+
+        <div class="signal-card blocked">
+          <div class="signal-header">
+            <div class="sig-icon sig-icon-r">📉</div>
+            <div><div class="sig-name">NIFTY 24,200 PE Buy</div><div class="sig-sub">ATM-1 · 29 May expiry · BLOCKED</div></div>
+            <div class="prob-big" style="color:var(--red)">52%</div>
+          </div>
+          <div class="tags"><span class="tag tag-r">FII long — against this</span><span class="tag tag-r">Spot above VWAP</span><span class="tag tag-a">Needs breakdown below 24,300</span></div>
+          <div style="font-size:12px;color:var(--text3)">PE buy blocked. Market is bullish. Signal fires only if spot breaks below VWAP with 5-min red candle below 24,300.</div>
+        </div>
+      </div>
+
+      <!-- BANKNIFTY SIGNALS -->
+      <div class="tab-panel" id="sig-panel-bn">
+        <div class="score-section">
+          <div class="score-ring">
+            <svg width="70" height="70" viewBox="0 0 70 70">
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#1e2535" stroke-width="8"/>
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="127 176" stroke-linecap="round"/>
+            </svg>
+            <div class="score-center"><div class="score-num" style="color:var(--green)">76</div><div class="score-label">/100</div></div>
+          </div>
+          <div class="score-detail">
+            <div class="score-title" style="color:var(--green)">BANKNIFTY — Trade Allowed</div>
+            <div class="score-sub">IVP 83, FII net long +12,400 Cr, PCR 1.18. Spot 283 pts above max pain 55,800. CE writers being squeezed. Gap-up momentum confirmed.</div>
+          </div>
+          <div class="score-verdict tag-g">✓ GO</div>
+        </div>
+
+        <div class="signal-card fire">
+          <div class="signal-header">
+            <div class="sig-icon sig-icon-g">📈</div>
+            <div><div class="sig-name">BANKNIFTY 56,500 CE Buy</div><div class="sig-sub">ATM+1 · 26 May expiry · Lot 15 · ACTIVE</div></div>
+            <div class="prob-big" style="color:var(--green)">76%</div>
+          </div>
+          <div class="levels">
+            <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹320</div><div class="level-sub">Buy here</div></div>
+            <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val">₹224</div><div class="level-sub">-30% = -₹1,440</div></div>
+            <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val">₹448</div><div class="level-sub">+40% = +₹1,920</div></div>
+            <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val">₹576</div><div class="level-sub">+80% = +₹3,840</div></div>
+            <div class="level lv-ltp"><div class="level-label">Live</div><div class="level-val" id="sig-bn-ltp">₹320</div><div class="level-sub" id="sig-bn-chg">0%</div></div>
+          </div>
+          <div class="tags">
+            <span class="tag tag-g">Gap-up open</span><span class="tag tag-b">IVP 83 — momentum move</span><span class="tag tag-g">FII +12,400 Cr long</span><span class="tag tag-g">OI: CE unwinding (short squeeze)</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6">BankNifty gap-up. Spot 283 above max pain. FII large long in futures. Call writers being squeezed — CE buying momentum play. High IVP means big moves expected. Book 50% at T1 then trail.</div>
+        </div>
+
+        <div class="signal-card blocked">
+          <div class="signal-header">
+            <div class="sig-icon sig-icon-r">📉</div>
+            <div><div class="sig-name">BANKNIFTY 55,500 PE Buy</div><div class="sig-sub">ATM-2 · 26 May expiry · BLOCKED</div></div>
+            <div class="prob-big" style="color:var(--red)">48%</div>
+          </div>
+          <div class="tags"><span class="tag tag-r">FII net long</span><span class="tag tag-r">283 pts above support</span><span class="tag tag-a">Deep OTM — risky</span></div>
+          <div style="font-size:12px;color:var(--text3)">PE buy blocked. FII is net long. Valid only on break of 55,800 support on 5-min candle. Currently too far for worthwhile risk/reward.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAPER TRADES PAGE -->
+    <div class="page" id="page-trades">
+      <div class="page-header">
+        <div class="page-title">Paper Trades</div>
+        <div class="page-sub">Live simulation — no real money involved</div>
+      </div>
+
+      <div class="warn-box">⚠️ <strong>No more new entries today.</strong> Both slots filled (max 1 per index). Focus on managing live trades below.</div>
+
+      <!-- Trade 1 -->
+      <div class="card" id="tc-nf">
+        <div class="card-title"><span class="dot" style="background:var(--blue)"></span>NIFTY 24,400 CE — Call Buy <span id="t1-status-badge" class="tag tag-g" style="margin-left:auto">LIVE</span></div>
+        <div class="levels">
+          <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹85</div><div class="level-sub">Paper buy</div></div>
+          <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val" id="t1-sl-display">₹60</div><div class="level-sub">Auto-exit</div></div>
+          <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val">₹119</div><div class="level-sub">Book 50%</div></div>
+          <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val">₹153</div><div class="level-sub">Full exit</div></div>
+          <div class="level lv-ltp"><div class="level-label">Live LTP</div><div class="level-val" id="t1-ltp">₹85</div><div class="level-sub" id="t1-chg-pct">0%</div></div>
+        </div>
+        <div class="pnl-row">
+          <span class="pnl-label">Paper P&L · 1 lot × 50 units</span>
+          <span class="pnl-val" id="t1-pnl">+₹0</span>
+        </div>
+        <div class="prog-wrap">
+          <div class="prog-labels">
+            <span style="color:var(--red)">SL ₹60</span>
+            <span id="t1-prog-lbl" style="color:var(--amber)">At entry</span>
+            <span style="color:var(--green)">T2 ₹153</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="t1-bar" style="width:47%;background:var(--amber)"></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+          <strong style="color:var(--text)">Why this trade:</strong> Gap-up open, spot above VWAP, 5-min candle bullish, OI at 24,400 CE falling (short covering), FII net long +6,140 Cr, PCR 1.24.<br>
+          <strong style="color:var(--text)">Rule:</strong> Book 50% at T1 (₹119). Trail SL to entry price (₹85) on remaining. Full exit at T2 (₹153) or 11:00 AM hard stop.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-red" onclick="manualExit('NF')">Exit at Market</button>
+          <button class="btn btn-amber" onclick="trailSL('NF')">Trail SL → ₹85</button>
+          <button class="btn btn-blue" onclick="bookHalf('NF')">Book 50% at T1</button>
+        </div>
+      </div>
+
+      <!-- Trade 2 -->
+      <div class="card" id="tc-bn">
+        <div class="card-title"><span class="dot" style="background:var(--green)"></span>BANKNIFTY 56,500 CE — Call Buy <span id="t2-status-badge" class="tag tag-g" style="margin-left:auto">LIVE</span></div>
+        <div class="levels">
+          <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹320</div><div class="level-sub">Paper buy</div></div>
+          <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val" id="t2-sl-display">₹224</div><div class="level-sub">Auto-exit</div></div>
+          <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val">₹448</div><div class="level-sub">Book 50%</div></div>
+          <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val">₹576</div><div class="level-sub">Full exit</div></div>
+          <div class="level lv-ltp"><div class="level-label">Live LTP</div><div class="level-val" id="t2-ltp">₹320</div><div class="level-sub" id="t2-chg-pct">0%</div></div>
+        </div>
+        <div class="pnl-row">
+          <span class="pnl-label">Paper P&L · 1 lot × 15 units</span>
+          <span class="pnl-val" id="t2-pnl">+₹0</span>
+        </div>
+        <div class="prog-wrap">
+          <div class="prog-labels">
+            <span style="color:var(--red)">SL ₹224</span>
+            <span id="t2-prog-lbl" style="color:var(--amber)">At entry</span>
+            <span style="color:var(--green)">T2 ₹576</span>
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="t2-bar" style="width:47%;background:var(--amber)"></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+          <strong style="color:var(--text)">Why this trade:</strong> BankNifty gap-up. Spot 283 above max pain (55,800). IVP 83 = fat premiums, big move expected. FII +12,400 Cr long. CE OI unwinding = short squeeze in progress.<br>
+          <strong style="color:var(--text)">Rule:</strong> Book 50% at T1 (₹448). Trail SL to entry (₹320). Full exit at T2 (₹576) or 11:00 AM.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-red" onclick="manualExit('BN')">Exit at Market</button>
+          <button class="btn btn-amber" onclick="trailSL('BN')">Trail SL → ₹320</button>
+          <button class="btn btn-blue" onclick="bookHalf('BN')">Book 50% at T1</button>
+        </div>
+      </div>
+
+      <!-- Capital summary -->
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Capital breakdown — today</div>
+        <div class="grid2">
+          <div>
+            <div class="stat-row"><span class="stat-key">Nifty CE deployed</span><span class="stat-val" style="color:var(--blue)">₹4,250</span></div>
+            <div class="stat-row"><span class="stat-key">BankNifty CE deployed</span><span class="stat-val" style="color:var(--green)">₹4,800</span></div>
+            <div class="stat-row"><span class="stat-key">Total deployed</span><span class="stat-val">₹9,050</span></div>
+          </div>
+          <div>
+            <div class="stat-row"><span class="stat-key">Worst case loss (both SL)</span><span class="stat-val" style="color:var(--red)">-₹2,690</span></div>
+            <div class="stat-row"><span class="stat-key">Best case (both T2)</span><span class="stat-val" style="color:var(--green)">+₹7,240</span></div>
+            <div class="stat-row"><span class="stat-key">Risk : Reward</span><span class="stat-val" style="color:var(--amber)">1 : 2.69</span></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--text2)">Combined paper P&L right now</span>
+          <span style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--green)" id="combined-pnl">+₹0</span>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-red" style="flex:2" onclick="exitAll()">🚨 Exit ALL Trades at Market</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- OI ANALYSIS PAGE -->
+    <div class="page" id="page-oi">
+      <div class="page-header">
+        <div class="page-title">OI Analysis</div>
+        <div class="page-sub">Open Interest data — support & resistance levels</div>
+      </div>
+      <div class="tab-row">
+        <button class="tab-btn active-nf" id="oi-tab-nf" onclick="switchOITab('nf')">📊 Nifty 50</button>
+        <button class="tab-btn" id="oi-tab-bn" onclick="switchOITab('bn')">🏦 BankNifty</button>
+      </div>
+      <div class="tab-panel visible" id="oi-panel-nf">
+        <div class="grid4" style="margin-bottom:14px">
+          <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" style="color:var(--green)">1.24</div><div class="metric-sub" style="color:var(--green)">Bullish</div></div>
+          <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val">24,000</div><div class="metric-sub" style="color:var(--amber)">352 below spot</div></div>
+          <div class="metric"><div class="metric-label">Put Wall</div><div class="metric-val" style="color:var(--green)">24,000</div><div class="metric-sub" style="color:var(--green)">Strong support</div></div>
+          <div class="metric"><div class="metric-label">Call Wall</div><div class="metric-val" style="color:var(--red)">24,700</div><div class="metric-sub" style="color:var(--red)">Strong resist</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Option Chain — Nifty 50</div>
+          <table class="oi-table">
+            <thead><tr><th style="color:var(--blue)">Call OI (L)</th><th style="color:var(--blue)">Chg%</th><th style="color:var(--blue)">LTP</th><th class="strike-col">Strike</th><th style="color:var(--green)">LTP</th><th style="color:var(--green)">Chg%</th><th style="color:var(--green)">Put OI (L)</th><th>Signal</th></tr></thead>
+            <tbody>
+              <tr><td class="call-col">18.4</td><td style="color:var(--red)">-8%</td><td class="call-col">1,294</td><td class="strike-col">23,800</td><td class="put-col">45</td><td style="color:var(--green)">+14%</td><td class="put-col">22.1</td><td><span class="tag tag-g">Support</span></td></tr>
+              <tr><td class="call-col">21.2</td><td style="color:var(--red)">-12%</td><td class="call-col">1,096</td><td class="strike-col">24,000</td><td class="put-col">62</td><td style="color:var(--green)">+22%</td><td class="put-col">38.6</td><td><span class="tag tag-g">Strong ✓</span></td></tr>
+              <tr class="atm-row"><td class="call-col">14.8</td><td style="color:var(--amber)">+3%</td><td class="call-col">931</td><td class="strike-col" style="color:var(--amber)">24,350 ATM</td><td class="put-col">85</td><td style="color:var(--amber)">+1%</td><td class="put-col">16.2</td><td><span class="tag tag-a">ATM zone</span></td></tr>
+              <tr><td class="call-col">29.4</td><td style="color:var(--green)">+18%</td><td class="call-col">608</td><td class="strike-col">24,500</td><td class="put-col">42</td><td style="color:var(--red)">-6%</td><td class="put-col">8.1</td><td><span class="tag tag-r">Resistance</span></td></tr>
+              <tr><td class="call-col">35.8</td><td style="color:var(--green)">+31%</td><td class="call-col">405</td><td class="strike-col">24,700</td><td class="put-col">18</td><td style="color:var(--red)">-9%</td><td class="put-col">4.2</td><td><span class="tag tag-r">Strong ✗</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--green)"></span>PCR trend — Nifty</div>
+          <div class="chart-wrap"><canvas id="pcr-nf-chart" role="img" aria-label="Nifty PCR trend chart over time">PCR trend data for Nifty showing values from 0.9 to 1.24 over 6 hours.</canvas></div>
+        </div>
+      </div>
+      <div class="tab-panel" id="oi-panel-bn">
+        <div class="grid4" style="margin-bottom:14px">
+          <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" style="color:var(--green)">1.18</div><div class="metric-sub" style="color:var(--green)">Bullish</div></div>
+          <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val">55,800</div><div class="metric-sub" style="color:var(--amber)">283 below spot</div></div>
+          <div class="metric"><div class="metric-label">Put Wall</div><div class="metric-val" style="color:var(--green)">55,500</div><div class="metric-sub" style="color:var(--green)">Strong support</div></div>
+          <div class="metric"><div class="metric-label">Call Wall</div><div class="metric-val" style="color:var(--red)">57,000</div><div class="metric-sub" style="color:var(--red)">Strong resist</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--green)"></span>Option Chain — BankNifty</div>
+          <table class="oi-table">
+            <thead><tr><th style="color:var(--blue)">Call OI (L)</th><th style="color:var(--blue)">Chg%</th><th style="color:var(--blue)">LTP</th><th class="strike-col">Strike</th><th style="color:var(--green)">LTP</th><th style="color:var(--green)">Chg%</th><th style="color:var(--green)">Put OI (L)</th><th>Signal</th></tr></thead>
+            <tbody>
+              <tr><td class="call-col">1.4</td><td style="color:var(--red)">-19%</td><td class="call-col">1,341</td><td class="strike-col">55,500</td><td class="put-col">180</td><td style="color:var(--green)">+7%</td><td class="put-col">9.3</td><td><span class="tag tag-g">Strong ✓</span></td></tr>
+              <tr><td class="call-col">1.4</td><td style="color:var(--green)">+60%</td><td class="call-col">1,163</td><td class="strike-col">55,900</td><td class="put-col">760</td><td style="color:var(--green)">+16%</td><td class="put-col">2.0</td><td><span class="tag tag-g">Support</span></td></tr>
+              <tr class="atm-row"><td class="call-col">1.4</td><td style="color:var(--green)">+60%</td><td class="call-col">1,036</td><td class="strike-col" style="color:var(--amber)">56,100 ATM</td><td class="put-col">843</td><td style="color:var(--green)">+46%</td><td class="put-col">0.9</td><td><span class="tag tag-a">ATM zone</span></td></tr>
+              <tr><td class="call-col">5.3</td><td style="color:var(--green)">+7%</td><td class="call-col">827</td><td class="strike-col">56,500</td><td class="put-col">1,029</td><td style="color:var(--green)">+1.8%</td><td class="put-col">4.1</td><td><span class="tag tag-a">Mild resist</span></td></tr>
+              <tr><td class="call-col">8.3</td><td style="color:var(--green)">+16%</td><td class="call-col">608</td><td class="strike-col">57,000</td><td class="put-col">1,287</td><td style="color:var(--green)">+8%</td><td class="put-col">4.2</td><td><span class="tag tag-r">Strong ✗</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FII DATA PAGE -->
+    <div class="page" id="page-fii">
+      <div class="page-header">
+        <div class="page-title">FII & Pro Data</div>
+        <div class="page-sub">Follow the smart money — FII futures and Pro desk positioning</div>
+      </div>
+      <div class="info-box">💡 <strong>Golden rule:</strong> FII net long in futures = buy calls. FII net short = buy puts. Pro desk does opposite of retail — follow Pro, not retail.</div>
+      <div class="fii-grid">
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--blue)"></span>FII — Nifty futures</div>
+          <div class="stat-row"><span class="stat-key">Long position</span><span class="stat-val" style="color:var(--green)">+8,240 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Short position</span><span class="stat-val" style="color:var(--red)">-2,100 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Net position</span><span class="stat-val" style="color:var(--green)">+6,140 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Put buy (hedge)</span><span class="stat-val" style="color:var(--amber)">Moderate</span></div>
+          <div class="stat-row"><span class="stat-key">Call selling</span><span class="stat-val" style="color:var(--green)">Active — bullish</span></div>
+          <div class="stat-row"><span class="stat-key">Signal</span><span class="stat-val"><span class="tag tag-g">BUY CALLS</span></span></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--green)"></span>FII — BankNifty futures</div>
+          <div class="stat-row"><span class="stat-key">Long position</span><span class="stat-val" style="color:var(--green)">+14,800 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Short position</span><span class="stat-val" style="color:var(--red)">-2,400 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Net position</span><span class="stat-val" style="color:var(--green)">+12,400 Cr</span></div>
+          <div class="stat-row"><span class="stat-key">Put buy (hedge)</span><span class="stat-val" style="color:var(--amber)">Moderate</span></div>
+          <div class="stat-row"><span class="stat-key">Call selling</span><span class="stat-val" style="color:var(--green)">Active — bullish</span></div>
+          <div class="stat-row"><span class="stat-key">Signal</span><span class="stat-val"><span class="tag tag-g">BUY CALLS</span></span></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--purple)"></span>Pro desk (Prop trading)</div>
+          <div class="stat-row"><span class="stat-key">Nifty puts</span><span class="stat-val" style="color:var(--green)">Selling (bullish)</span></div>
+          <div class="stat-row"><span class="stat-key">Nifty calls</span><span class="stat-val" style="color:var(--green)">Holding longs</span></div>
+          <div class="stat-row"><span class="stat-key">BankNifty puts</span><span class="stat-val" style="color:var(--green)">Selling puts</span></div>
+          <div class="stat-row"><span class="stat-key">BankNifty calls</span><span class="stat-val" style="color:var(--green)">Holding longs</span></div>
+          <div class="stat-row"><span class="stat-key">Overall bias</span><span class="stat-val"><span class="tag tag-g">BULLISH</span></span></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--red)"></span>Retail clients (do opposite)</div>
+          <div class="stat-row"><span class="stat-key">Nifty</span><span class="stat-val" style="color:var(--red)">Buying puts (fear)</span></div>
+          <div class="stat-row"><span class="stat-key">BankNifty</span><span class="stat-val" style="color:var(--red)">Net put buyers</span></div>
+          <div class="stat-row"><span class="stat-key">Sentiment</span><span class="stat-val" style="color:var(--red)">Bearish (wrong)</span></div>
+          <div class="stat-row"><span class="stat-key">Divergence signal</span><span class="stat-val" style="color:var(--green)">Contrarian BUY</span></div>
+          <div class="stat-row"><span class="stat-key">Action</span><span class="stat-val"><span class="tag tag-g">FOLLOW PRO DESK</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROBABILITY PAGE -->
+    <div class="page" id="page-probability">
+      <div class="page-header">
+        <div class="page-title">Probability Engine</div>
+        <div class="page-sub">70% minimum score required — 5 factors scored out of 100</div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Nifty 50 — score breakdown</div>
+          <div class="stat-row"><span class="stat-key">OI Direction (25 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:80%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">20/25</span></div></div>
+          <div class="stat-row"><span class="stat-key">FII Net (25 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:74%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">18/25</span></div></div>
+          <div class="stat-row"><span class="stat-key">PCR Trend (20 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:78%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">16/20</span></div></div>
+          <div class="stat-row"><span class="stat-key">IV Environment (15 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:65%;background:var(--amber)"></div></div><span class="stat-val" style="color:var(--amber)">10/15</span></div></div>
+          <div class="stat-row"><span class="stat-key">Pro/Client (15 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:73%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">11/15</span></div></div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:14px;font-weight:600">Total Score</span>
+            <span style="font-size:24px;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace">75/100 ✓</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot" style="background:var(--green)"></span>BankNifty — score breakdown</div>
+          <div class="stat-row"><span class="stat-key">OI Direction (25 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:78%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">20/25</span></div></div>
+          <div class="stat-row"><span class="stat-key">FII Net (25 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:73%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">18/25</span></div></div>
+          <div class="stat-row"><span class="stat-key">PCR Trend (20 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:75%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">15/20</span></div></div>
+          <div class="stat-row"><span class="stat-key">IV Environment (15 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:83%;background:var(--green)"></div></div><span class="stat-val" style="color:var(--green)">13/15</span></div></div>
+          <div class="stat-row"><span class="stat-key">Pro/Client (15 pts)</span><div style="display:flex;align-items:center;gap:8px"><div class="mini-bar"><div class="mini-fill" style="width:67%;background:var(--amber)"></div></div><span class="stat-val" style="color:var(--amber)">10/15</span></div></div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:14px;font-weight:600">Total Score</span>
+            <span style="font-size:24px;font-weight:700;color:var(--green);font-family:'JetBrains Mono',monospace">76/100 ✓</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Probability threshold rules</div>
+        <div class="stat-row"><span class="stat-key">≥ 70% score</span><span class="stat-val"><span class="tag tag-g">TRADE ALLOWED — signal fires</span></span></div>
+        <div class="stat-row"><span class="stat-key">60–69% score</span><span class="stat-val"><span class="tag tag-a">WAIT — monitor for improvement</span></span></div>
+        <div class="stat-row"><span class="stat-key">Below 60% score</span><span class="stat-val"><span class="tag tag-r">BLOCKED — no trade</span></span></div>
+        <div class="stat-row"><span class="stat-key">After 10:45 AM</span><span class="stat-val"><span class="tag tag-r">ALL NEW ENTRIES BLOCKED</span></span></div>
+        <div class="stat-row"><span class="stat-key">Max trades per index</span><span class="stat-val">1 per day — no overtrading</span></div>
+        <div class="stat-row"><span class="stat-key">Strike selection</span><span class="stat-val">ATM or ATM+1 only</span></div>
+      </div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div class="page-title">Trade History</div>
+        <div class="page-sub">All completed paper trades — track your performance</div>
+      </div>
+      <div class="grid4" style="margin-bottom:14px">
+        <div class="metric"><div class="metric-label">Total trades</div><div class="metric-val">0</div><div class="metric-sub" style="color:var(--text2)">This week</div></div>
+        <div class="metric"><div class="metric-label">Win rate</div><div class="metric-val" style="color:var(--green)">—</div><div class="metric-sub" style="color:var(--text2)">No data yet</div></div>
+        <div class="metric"><div class="metric-label">Total P&L</div><div class="metric-val" id="hist-pnl">+₹0</div><div class="metric-sub" style="color:var(--text2)">Paper trades</div></div>
+        <div class="metric"><div class="metric-label">Best trade</div><div class="metric-val" style="color:var(--text2)">—</div><div class="metric-sub" style="color:var(--text2)">No data yet</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--purple)"></span>Completed trades</div>
+        <div id="history-list" style="color:var(--text2);font-size:13px;text-align:center;padding:24px 0">
+          No completed trades yet. Active trades will appear here once exited.
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div class="page-title">Settings</div>
+        <div class="page-sub">Configure your autopilot rules</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Probability & Entry rules</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Minimum probability threshold</div><div class="setting-desc">Only fire signals above this score (default: 70%)</div></div>
+          <input type="number" value="70" min="50" max="95" style="width:80px" id="s-prob">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Stop loss %</div><div class="setting-desc">Exit option if it loses this % of buy price (default: 30%)</div></div>
+          <input type="number" value="30" min="15" max="50" style="width:80px" id="s-sl">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Target 1 %</div><div class="setting-desc">Book 50% profit at this gain (default: 40%)</div></div>
+          <input type="number" value="40" min="20" max="100" style="width:80px" id="s-t1">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Target 2 %</div><div class="setting-desc">Full exit at this gain (default: 80%)</div></div>
+          <input type="number" value="80" min="40" max="200" style="width:80px" id="s-t2">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Time & autopilot rules</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Hard exit time</div><div class="setting-desc">Auto-square all positions at this time</div></div>
+          <input type="text" value="11:00" style="width:80px" id="s-exit-time">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">No new entries after</div><div class="setting-desc">Block all new entries after this time</div></div>
+          <input type="text" value="10:45" style="width:80px" id="s-no-entry">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Max trades per index per day</div><div class="setting-desc">Prevents overtrading (default: 1)</div></div>
+          <input type="number" value="1" min="1" max="3" style="width:80px" id="s-max-trades">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Auto trail SL at T1</div><div class="setting-desc">Automatically move SL to entry when T1 is hit</div></div>
+          <div class="toggle on" id="toggle-trail" onclick="toggleSetting('trail')"><div class="toggle-thumb"></div></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Telegram alerts</div><div class="setting-desc">Send signal alerts to Telegram (requires bot token)</div></div>
+          <div class="toggle" id="toggle-telegram" onclick="toggleSetting('telegram')"><div class="toggle-thumb"></div></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Trade mode</div><div class="setting-desc">Switch between paper trading and live execution</div></div>
+          <select id="s-mode">
+            <option value="paper" selected>Paper Trade</option>
+            <option value="live">Live (Zerodha API)</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--red)"></span>Broker API (for live trading)</div>
+        <div class="warn-box">⚠️ Leave blank for paper trading. Only fill if you want live auto-execution via Zerodha Kite API.</div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Zerodha API Key</div><div class="setting-desc">From Kite developer console</div></div>
+          <input type="text" placeholder="Enter API key" style="width:200px">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Zerodha API Secret</div><div class="setting-desc">Keep this private</div></div>
+          <input type="text" placeholder="Enter API secret" style="width:200px">
+        </div>
+        <div class="setting-row">
+          <div class="setting-info"><div class="setting-name">Telegram Bot Token</div><div class="setting-desc">For alert messages</div></div>
+          <input type="text" placeholder="Enter bot token" style="width:200px">
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-green">Save Settings</button>
+          <button class="btn btn-blue">Test Connection</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ====== STATE ======
+let nfLtp = 85, bnLtp = 320;
+let nfSL = 60, bnSL = 224;
+let nfActive = true, bnActive = true;
+let nfSpot = 24352, bnSpot = 56083;
+let simMin = 15, simSec = 0;
+let mode = 'paper';
+let historyTrades = [];
+
+// ====== NAVIGATION ======
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event && event.target && event.target.classList.add('active');
+}
+
+// ====== CLOCK & WINDOW ======
+function updateClock() {
+  const h = 9, m = simMin, s = simSec;
+  const ts = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  document.getElementById('top-clock').textContent = ts;
+  const pct = Math.min(100, Math.round((simMin / 120) * 100));
+  document.getElementById('window-fill').style.width = pct + '%';
+  document.getElementById('window-pct-lbl').textContent = pct + '% elapsed';
+  const wsl = document.getElementById('window-status-lbl');
+  const wf = document.getElementById('window-fill');
+  if (simMin < 45) { wsl.textContent = 'Window OPEN'; wsl.style.color = 'var(--green)'; wf.style.background = 'var(--green)'; }
+  else if (simMin < 60) { wsl.textContent = 'Caution zone'; wsl.style.color = 'var(--amber)'; wf.style.background = 'var(--amber)'; }
+  else if (simMin < 75) { wsl.textContent = 'Exit only'; wsl.style.color = 'var(--red)'; wf.style.background = 'var(--red)'; }
+  else { wsl.textContent = 'WINDOW CLOSED'; wsl.style.color = 'var(--red)'; wf.style.background = 'var(--red)'; }
+  simSec++;
+  if (simSec >= 60) { simSec = 0; simMin++; if (simMin > 120) simMin = 0; }
+}
+
+// ====== PRICE TICKS ======
+function tick() {
+  const nfD = (Math.random() - 0.45) * 7;
+  const bnD = (Math.random() - 0.45) * 20;
+  nfSpot = Math.max(23500, nfSpot + nfD);
+  bnSpot = Math.max(54000, bnSpot + bnD);
+
+  const nfFmt = Math.round(nfSpot).toLocaleString('en-IN');
+  const bnFmt = Math.round(bnSpot).toLocaleString('en-IN');
+  ['nf-top'].forEach(id => document.getElementById(id) && (document.getElementById(id).textContent = nfFmt));
+  ['bn-top'].forEach(id => document.getElementById(id) && (document.getElementById(id).textContent = bnFmt));
+  const ntc = document.getElementById('nf-top-chg');
+  const btc = document.getElementById('bn-top-chg');
+  if (ntc) { ntc.textContent = (nfD >= 0 ? '▲ +' : '▼ ') + Math.abs(nfD).toFixed(0); ntc.className = 'idx-chg ' + (nfD >= 0 ? 'up' : 'down'); }
+  if (btc) { btc.textContent = (bnD >= 0 ? '▲ +' : '▼ ') + Math.abs(bnD).toFixed(0); btc.className = 'idx-chg ' + (bnD >= 0 ? 'up' : 'down'); }
+
+  if (nfActive) {
+    nfLtp = Math.max(5, nfLtp + (Math.random() - 0.44) * 5);
+    if (nfLtp <= nfSL) { autoExit('NF', 'SL'); } else if (nfLtp >= 153) { autoExit('NF', 'T2'); }
+  }
+  if (bnActive) {
+    bnLtp = Math.max(5, bnLtp + (Math.random() - 0.44) * 18);
+    if (bnLtp <= bnSL) { autoExit('BN', 'SL'); } else if (bnLtp >= 576) { autoExit('BN', 'T2'); }
+  }
+
+  updateTradeDisplay();
+}
+
+function updateTradeDisplay() {
+  const nfPnl = Math.round((nfLtp - 85) * 50);
+  const bnPnl = Math.round((bnLtp - 320) * 15);
+  const total = (nfActive ? nfPnl : 0) + (bnActive ? bnPnl : 0);
+
+  // Dashboard & trades page updates
+  const ids = ['d-nf-ltp','t1-ltp','sig-nf-ltp'];
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '₹' + Math.round(nfLtp); });
+  const ids2 = ['d-bn-ltp','t2-ltp','sig-bn-ltp'];
+  ids2.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '₹' + Math.round(bnLtp); });
+
+  const nfPct = (((nfLtp - 85) / 85) * 100).toFixed(1);
+  const bnPct = (((bnLtp - 320) / 320) * 100).toFixed(1);
+  ['d-nf-chg','t1-chg-pct','sig-nf-chg'].forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = (nfPct >= 0 ? '+' : '') + nfPct + '%'; el.style.color = nfPct >= 0 ? 'var(--green)' : 'var(--red)'; }});
+  ['d-bn-chg','t2-chg-pct','sig-bn-chg'].forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = (bnPct >= 0 ? '+' : '') + bnPct + '%'; el.style.color = bnPct >= 0 ? 'var(--green)' : 'var(--red)'; }});
+
+  const pnlFmt = v => (v >= 0 ? '+' : '') + '₹' + Math.abs(v).toLocaleString('en-IN');
+  const pnlColor = v => v >= 0 ? 'var(--green)' : 'var(--red)';
+  ['d-nf-pnl','t1-pnl'].forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = pnlFmt(nfPnl); el.style.color = pnlColor(nfPnl); }});
+  ['d-bn-pnl','t2-pnl'].forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = pnlFmt(bnPnl); el.style.color = pnlColor(bnPnl); }});
+  ['dash-pnl','combined-pnl','hist-pnl'].forEach(id => { const el = document.getElementById(id); if(el) { el.textContent = pnlFmt(total); el.style.color = pnlColor(total); }});
+
+  // Progress bars
+  updateBar('d-nf-bar', nfLtp, 60, 85, 153);
+  updateBar('t1-bar', nfLtp, 60, 85, 153);
+  updateBar('d-bn-bar', bnLtp, 224, 320, 576);
+  updateBar('t2-bar', bnLtp, 224, 320, 576);
+  updateProgLabel('t1-prog-lbl', nfLtp, 85, 60, 119, 153);
+  updateProgLabel('t2-prog-lbl', bnLtp, 320, 224, 448, 576);
+}
+
+function updateBar(id, ltp, sl, entry, t2) {
+  const el = document.getElementById(id); if (!el) return;
+  const range = t2 - sl, pos = Math.min(Math.max(ltp, sl), t2);
+  el.style.width = Math.round(((pos - sl) / range) * 100) + '%';
+  el.style.background = ltp >= entry * 1.4 ? 'var(--green)' : ltp < entry ? 'var(--red)' : 'var(--amber)';
+}
+
+function updateProgLabel(id, ltp, entry, sl, t1, t2) {
+  const el = document.getElementById(id); if (!el) return;
+  if (ltp >= t2) { el.textContent = '🎯 T2 HIT!'; el.style.color = 'var(--green)'; }
+  else if (ltp >= t1) { el.textContent = 'T1 hit — trail SL'; el.style.color = 'var(--green)'; }
+  else if (ltp > entry) { el.textContent = 'In profit ▲'; el.style.color = 'var(--green)'; }
+  else if (ltp === entry) { el.textContent = 'At entry'; el.style.color = 'var(--amber)'; }
+  else if (ltp <= sl) { el.textContent = '🚨 SL HIT'; el.style.color = 'var(--red)'; }
+  else { el.textContent = 'Below entry ▼'; el.style.color = 'var(--amber)'; }
+}
+
+// ====== TRADE ACTIONS ======
+function autoExit(idx, reason) {
+  const ltp = idx === 'NF' ? nfLtp : bnLtp;
+  const entry = idx === 'NF' ? 85 : 320;
+  const mult = idx === 'NF' ? 50 : 15;
+  const name = idx === 'NF' ? 'NIFTY 24,400 CE' : 'BNIFTY 56,500 CE';
+  const pnl = Math.round((ltp - entry) * mult);
+  if (idx === 'NF') nfActive = false; else bnActive = false;
+  addToHistory(name, entry, Math.round(ltp), pnl, reason);
+  updateStatusBadge(idx, reason);
+  addLog(reason === 'SL' ? 'var(--red)' : 'var(--green)', (reason === 'SL' ? '🚨 SL HIT' : '🎯 TARGET HIT') + ' — ' + name + ' exited @ ₹' + Math.round(ltp) + ' · ' + (pnl >= 0 ? '+' : '') + '₹' + pnl);
+}
+
+function manualExit(idx) {
+  const ltp = idx === 'NF' ? nfLtp : bnLtp;
+  const entry = idx === 'NF' ? 85 : 320;
+  const mult = idx === 'NF' ? 50 : 15;
+  const name = idx === 'NF' ? 'NIFTY 24,400 CE' : 'BNIFTY 56,500 CE';
+  const pnl = Math.round((ltp - entry) * mult);
+  if (idx === 'NF') nfActive = false; else bnActive = false;
+  addToHistory(name, entry, Math.round(ltp), pnl, 'Manual');
+  updateStatusBadge(idx, 'Manual');
+  addLog('var(--amber)', 'MANUAL EXIT — ' + name + ' @ ₹' + Math.round(ltp) + ' · ' + (pnl >= 0 ? 'Profit' : 'Loss') + ': ' + (pnl >= 0 ? '+' : '') + '₹' + pnl);
+}
+
+function trailSL(idx) {
+  if (idx === 'NF') { nfSL = 85; document.getElementById('t1-sl-display').textContent = '₹85'; }
+  else { bnSL = 320; document.getElementById('t2-sl-display').textContent = '₹320'; }
+  addLog('var(--amber)', 'SL TRAILED to entry — ' + (idx === 'NF' ? 'Nifty CE SL → ₹85' : 'BankNifty CE SL → ₹320') + ' · Trade is now risk-free');
+}
+
+function bookHalf(idx) {
+  const ltp = idx === 'NF' ? nfLtp : bnLtp;
+  const entry = idx === 'NF' ? 85 : 320;
+  const mult = idx === 'NF' ? 25 : 7;
+  const pnl = Math.round((ltp - entry) * mult);
+  addLog('var(--green)', '50% BOOKED — ' + (idx === 'NF' ? 'Nifty CE' : 'BankNifty CE') + ' · Partial P&L: +₹' + pnl + ' · Remaining riding free');
+  trailSL(idx);
+}
+
+function exitAll() {
+  if (nfActive) manualExit('NF');
+  if (bnActive) manualExit('BN');
+}
+
+function updateStatusBadge(idx, reason) {
+  const badgeId = idx === 'NF' ? 't1-status-badge' : 't2-status-badge';
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  if (reason === 'SL') { badge.textContent = 'SL HIT'; badge.className = 'tag tag-r'; }
+  else if (reason === 'T2') { badge.textContent = 'TARGET HIT'; badge.className = 'tag tag-g'; }
+  else { badge.textContent = 'EXITED'; badge.className = 'tag tag-a'; }
+}
+
+// ====== HISTORY ======
+function addToHistory(name, entry, exit, pnl, reason) {
+  historyTrades.push({ name, entry, exit, pnl, reason, time: String(9).padStart(2,'0') + ':' + String(simMin).padStart(2,'0') });
+  renderHistory();
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-list'); if (!el) return;
+  if (historyTrades.length === 0) { el.innerHTML = '<div style="color:var(--text2);text-align:center;padding:24px 0">No completed trades yet.</div>'; return; }
+  el.innerHTML = historyTrades.map(t => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div><div style="font-weight:600;color:var(--text)">${t.name}</div><div style="font-size:11px;color:var(--text2)">${t.time} · Entry ₹${t.entry} → Exit ₹${t.exit} · ${t.reason}</div></div>
+      <div style="font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${t.pnl >= 0 ? 'var(--green)' : 'var(--red)'}">${t.pnl >= 0 ? '+' : ''}₹${t.pnl}</div>
+    </div>`).join('');
+}
+
+// ====== LOG ======
+function addLog(color, text) {
+  const log = document.getElementById('dash-log'); if (!log) return;
+  const ts = String(9).padStart(2,'0') + ':' + String(simMin).padStart(2,'0');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<div class="log-time">${ts}</div><div class="log-dot" style="background:${color}"></div><div class="log-text">${text}</div>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ====== MODE TOGGLE ======
+function toggleMode() {
+  mode = mode === 'paper' ? 'live' : 'paper';
+  const badge = document.getElementById('mode-badge');
+  badge.textContent = mode === 'paper' ? '● PAPER TRADE' : '● LIVE';
+  badge.className = 'mode-badge ' + (mode === 'paper' ? 'paper-mode' : 'live-mode');
+}
+
+// ====== TAB SWITCHERS ======
+function switchSigTab(id) {
+  ['nf','bn'].forEach(t => {
+    document.getElementById('sig-panel-' + t).classList.remove('visible');
+    document.getElementById('sig-tab-' + t).className = 'tab-btn';
+  });
+  document.getElementById('sig-panel-' + id).classList.add('visible');
+  document.getElementById('sig-tab-' + id).className = 'tab-btn ' + (id === 'nf' ? 'active-nf' : 'active-bn');
+}
+
+function switchOITab(id) {
+  ['nf','bn'].forEach(t => {
+    document.getElementById('oi-panel-' + t).classList.remove('visible');
+    document.getElementById('oi-tab-' + t).className = 'tab-btn';
+  });
+  document.getElementById('oi-panel-' + id).classList.add('visible');
+  document.getElementById('oi-tab-' + id).className = 'tab-btn ' + (id === 'nf' ? 'active-nf' : 'active-bn');
+}
+
+// ====== SETTINGS TOGGLES ======
+const toggleState = { trail: true, telegram: false };
+function toggleSetting(key) {
+  toggleState[key] = !toggleState[key];
+  const el = document.getElementById('toggle-' + key);
+  if (el) el.classList.toggle('on', toggleState[key]);
+}
+
+// ====== CHARTS ======
+function initCharts() {
+  const pcrCtx = document.getElementById('pcr-nf-chart');
+  if (pcrCtx) {
+    new Chart(pcrCtx, {
+      type: 'line',
+      data: {
+        labels: ['9:00','9:15','9:30','9:45','10:00','10:15','10:30','10:45','11:00'],
+        datasets: [{
+          label: 'PCR',
+          data: [0.92, 0.98, 1.05, 1.10, 1.15, 1.18, 1.22, 1.24, 1.24],
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.1)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#22c55e'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#5a6177', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { ticks: { color: '#5a6177', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' }, min: 0.7, max: 1.5 }
+        }
+      }
+    });
+  }
+}
+
+// ====== START ======
+setInterval(updateClock, 1000);
+setInterval(tick, 2000);
+updateClock();
+updateTradeDisplay();
+setTimeout(initCharts, 500);
+</script>
+</body>
+</html>
