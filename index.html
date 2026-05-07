@@ -3,1120 +3,1368 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoPilot Trader — Real NSE Data</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<title>AutoPilot Trader — Dhan Live Data</title>
 <style>
-  :root {
-    --bg:#0f1117; --bg2:#161b27; --bg3:#1e2535; --card:#1a2030;
-    --border:rgba(255,255,255,0.08); --border2:rgba(255,255,255,0.15);
-    --text:#e8eaf0; --text2:#8b92a5; --text3:#5a6177;
-    --green:#22c55e; --green2:#16a34a; --green-bg:rgba(34,197,94,0.1); --green-border:rgba(34,197,94,0.3);
-    --red:#ef4444; --red-bg:rgba(239,68,68,0.1); --red-border:rgba(239,68,68,0.3);
-    --amber:#f59e0b; --amber-bg:rgba(245,158,11,0.1); --amber-border:rgba(245,158,11,0.3);
-    --blue:#3b82f6; --blue-bg:rgba(59,130,246,0.1); --blue-border:rgba(59,130,246,0.3);
-    --radius:10px; --radius-sm:6px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
-  .app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr;min-height:100vh}
-  header{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px}
-  .logo{display:flex;align-items:center;gap:10px}
-  .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#22c55e,#3b82f6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
-  .logo-text{font-size:15px;font-weight:700}
-  .logo-sub{font-size:11px;color:var(--text2)}
-  .topbar-center{display:flex;gap:16px}
-  .idx-pill{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 14px;cursor:pointer}
-  .idx-name{font-size:11px;color:var(--text2);font-weight:600;letter-spacing:.05em}
-  .idx-price{font-size:15px;font-weight:700;font-family:monospace}
-  .idx-chg{font-size:11px;font-weight:500}
-  .up{color:var(--green)} .down{color:var(--red)}
-  .topbar-right{display:flex;align-items:center;gap:10px}
-  .clock{font-family:monospace;font-size:14px;background:var(--bg3);padding:5px 12px;border-radius:6px;border:1px solid var(--border)}
-  .data-badge{font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:6px}
-  .data-live{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
-  .data-loading{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
-  .data-error{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
-  .pulse{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.5s infinite}
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
-  nav{background:var(--bg2);border-right:1px solid var(--border);padding:16px 12px;overflow-y:auto}
-  .nav-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding:0 8px;margin-top:12px}
-  .nav-label:first-child{margin-top:0}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text2);transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
-  .nav-item:hover{background:var(--bg3);color:var(--text)}
-  .nav-item.active{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
-  .nav-badge{margin-left:auto;font-size:10px;font-weight:600;background:var(--green-bg);color:var(--green);padding:2px 7px;border-radius:10px}
-  main{overflow-y:auto;padding:20px;background:var(--bg)}
-  .page{display:none} .page.active{display:block}
-  .page-title{font-size:20px;font-weight:700;margin-bottom:4px}
-  .page-sub{font-size:13px;color:var(--text2);margin-bottom:18px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
-  .card-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-  .dot{width:6px;height:6px;border-radius:50%}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-  .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
-  .metric{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px}
-  .metric-label{font-size:11px;color:var(--text3);margin-bottom:4px}
-  .metric-val{font-size:20px;font-weight:700;font-family:monospace}
-  .metric-sub{font-size:11px;margin-top:3px}
-  .levels{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
-  .level{border-radius:var(--radius-sm);padding:8px 10px;text-align:center}
-  .level-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
-  .level-val{font-size:15px;font-weight:700;font-family:monospace}
-  .level-sub{font-size:10px;margin-top:2px}
-  .lv-entry{background:var(--blue-bg);border:1px solid var(--blue-border)}
-  .lv-entry .level-label,.lv-entry .level-sub{color:rgba(59,130,246,.7)} .lv-entry .level-val{color:var(--blue)}
-  .lv-sl{background:var(--red-bg);border:1px solid var(--red-border)}
-  .lv-sl .level-label,.lv-sl .level-sub{color:rgba(239,68,68,.7)} .lv-sl .level-val{color:var(--red)}
-  .lv-t1{background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2)}
-  .lv-t1 .level-label,.lv-t1 .level-sub{color:rgba(34,197,94,.6)} .lv-t1 .level-val{color:#86efac}
-  .lv-t2{background:var(--green-bg);border:1px solid var(--green-border)}
-  .lv-t2 .level-label,.lv-t2 .level-sub{color:rgba(34,197,94,.7)} .lv-t2 .level-val{color:var(--green)}
-  .lv-ltp{background:var(--bg3);border:1px solid var(--border2)}
-  .lv-ltp .level-label{color:var(--text3)} .lv-ltp .level-val{color:var(--text)}
-  .pnl-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:8px}
-  .pnl-label{font-size:12px;color:var(--text2)}
-  .pnl-val{font-size:16px;font-weight:700;font-family:monospace}
-  .prog-wrap{margin-bottom:8px}
-  .prog-labels{display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px}
-  .prog-track{height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
-  .prog-fill{height:8px;border-radius:4px;transition:width .5s ease,background .3s}
-  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
-  .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:10px}
-  .tag-g{background:var(--green-bg);color:#86efac;border:1px solid var(--green-border)}
-  .tag-r{background:var(--red-bg);color:#fca5a5;border:1px solid var(--red-border)}
-  .tag-b{background:var(--blue-bg);color:#93c5fd;border:1px solid var(--blue-border)}
-  .tag-a{background:var(--amber-bg);color:#fcd34d;border:1px solid var(--amber-border)}
-  .btn{padding:8px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
-  .btn-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
-  .btn-green:hover{background:rgba(34,197,94,.2)}
-  .btn-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
-  .btn-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
-  .btn-blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
-  .btn-row{display:flex;gap:8px;margin-top:10px}
-  .btn-row .btn{flex:1}
-  .oi-table{width:100%;border-collapse:collapse;font-size:12px}
-  .oi-table th{padding:7px 10px;text-align:left;color:var(--text3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-  .oi-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:monospace}
-  .oi-table tr:last-child td{border-bottom:none}
-  .oi-table tr.atm-row td{background:var(--amber-bg)}
-  .call-col{color:var(--blue);font-weight:600}
-  .put-col{color:var(--green);font-weight:600}
-  .strike-col{text-align:center;font-weight:700;color:var(--text)}
-  .log-entry{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
-  .log-entry:last-child{border-bottom:none}
-  .log-time{font-family:monospace;color:var(--text3);min-width:44px;font-size:11px;padding-top:1px}
-  .log-dot{width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0}
-  .log-text{color:var(--text);line-height:1.4;flex:1}
-  .tab-row{display:flex;gap:6px;margin-bottom:16px}
-  .tab-btn{padding:7px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .15s}
-  .tab-btn.active-nf{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
-  .tab-btn.active-bn{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
-  .tab-panel{display:none} .tab-panel.visible{display:block}
-  .window-bar{margin-bottom:14px}
-  .window-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:5px}
-  .window-track{height:12px;background:var(--bg3);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
-  .window-fill{height:12px;border-radius:6px;transition:width 1s}
-  .stat-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)}
-  .stat-row:last-child{border-bottom:none}
-  .stat-key{font-size:12px;color:var(--text2)}
-  .stat-val{font-size:13px;font-weight:600;font-family:monospace}
-  .warn-box{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fcd34d;line-height:1.6}
-  .info-box{background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:#93c5fd;line-height:1.6}
-  .success-box{background:var(--green-bg);border:1px solid var(--green-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:#86efac;line-height:1.6}
-  .refresh-bar{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;margin-bottom:14px}
-  .refresh-left{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)}
-  .refresh-btn{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);border-radius:var(--radius-sm);padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
-  .next-refresh{font-size:11px;color:var(--text3)}
-  .spinner{display:inline-block;animation:spin .8s linear infinite;font-size:14px}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  ::-webkit-scrollbar{width:6px}
-  ::-webkit-scrollbar-track{background:var(--bg2)}
-  ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
-  input[type=number],input[type=text],select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 10px;font-size:13px;font-family:inherit;outline:none}
-  input:focus,select:focus{border-color:var(--blue)}
-  .toggle{width:44px;height:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;position:relative;cursor:pointer;transition:background .2s}
-  .toggle.on{background:var(--green2);border-color:var(--green2)}
-  .toggle-thumb{width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s}
-  .toggle.on .toggle-thumb{left:22px}
-  .setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
-  .setting-row:last-child{border-bottom:none}
-  .setting-name{font-size:13px;font-weight:500}
-  .setting-desc{font-size:11px;color:var(--text2);margin-top:2px}
-  .chart-wrap{position:relative;height:200px;margin-top:10px}
-  .signal-fire{border-color:var(--green-border)!important;border-width:1.5px!important}
-  .signal-wait{border-color:var(--amber-border)!important}
-  .signal-block{opacity:.55}
-  @media(max-width:768px){
-    .app{grid-template-columns:1fr;grid-template-rows:56px auto 1fr}
-    nav{display:none}
-    .topbar-center{display:none}
-    .grid4,.grid5{grid-template-columns:repeat(2,1fr)}
-    .levels{grid-template-columns:repeat(3,1fr)}
-    .grid2{grid-template-columns:1fr}
-  }
+:root {
+  --bg:#0b0e18; --bg2:#111622; --bg3:#181f30; --card:#141929;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+  --text:#e2e8f5; --text2:#7b849a; --text3:#4a5168;
+  --green:#22c55e; --green2:#16a34a; --gbg:rgba(34,197,94,0.1); --gbdr:rgba(34,197,94,0.3);
+  --red:#ef4444; --rbg:rgba(239,68,68,0.1); --rbdr:rgba(239,68,68,0.3);
+  --amber:#f59e0b; --abg:rgba(245,158,11,0.1); --abdr:rgba(245,158,11,0.3);
+  --blue:#3b82f6; --bbg:rgba(59,130,246,0.1); --bbdr:rgba(59,130,246,0.3);
+  --purple:#8b5cf6; --pbg:rgba(139,92,246,0.1);
+  --r:10px; --rs:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh;font-size:14px}
+
+/* ── LAYOUT ── */
+.shell{display:grid;grid-template-columns:230px 1fr;grid-template-rows:58px 1fr;height:100vh;overflow:hidden}
+header{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:16px;flex-shrink:0}
+nav{background:var(--bg2);border-right:1px solid var(--border);padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+main{overflow-y:auto;padding:20px;background:var(--bg)}
+
+/* ── HEADER ── */
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#22c55e 0%,#3b82f6 100%);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.logo-name{font-size:14px;font-weight:700;letter-spacing:-.2px}
+.logo-sub{font-size:10px;color:var(--text2)}
+.idx-pills{display:flex;gap:10px}
+.idx-pill{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;transition:border-color .15s}
+.idx-pill:hover{border-color:var(--border2)}
+.idx-name{font-size:10px;color:var(--text2);font-weight:700;letter-spacing:.06em}
+.idx-val{font-size:15px;font-weight:700;font-family:monospace;letter-spacing:-.3px}
+.idx-chg{font-size:11px;font-weight:600}
+.hdr-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.clock-box{font-family:monospace;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 11px;letter-spacing:.5px}
+.conn-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid;cursor:pointer;transition:all .2s}
+.cb-ok{background:var(--gbg);color:var(--green);border-color:var(--gbdr)}
+.cb-loading{background:var(--abg);color:var(--amber);border-color:var(--abdr)}
+.cb-err{background:var(--rbg);color:var(--red);border-color:var(--rbdr)}
+.cb-off{background:var(--bg3);color:var(--text2);border-color:var(--border)}
+.blink{animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ── NAV ── */
+.nav-section{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;padding:12px 10px 5px}
+.nav-section:first-child{padding-top:4px}
+.nav-btn{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--rs);cursor:pointer;font-size:12px;color:var(--text2);transition:all .15s;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.nav-btn:hover{background:var(--bg3);color:var(--text)}
+.nav-btn.active{background:var(--bbg);color:var(--blue);border:1px solid var(--bbdr)}
+.nav-icon{font-size:15px;width:20px;text-align:center}
+.nav-badge{margin-left:auto;font-size:9px;font-weight:700;background:var(--gbg);color:var(--green);padding:2px 7px;border-radius:10px;border:1px solid var(--gbdr)}
+.nav-footer{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);text-align:center;line-height:1.7}
+
+/* ── PAGES ── */
+.page{display:none}.page.active{display:block}
+.pg-title{font-size:19px;font-weight:700;margin-bottom:3px;letter-spacing:-.3px}
+.pg-sub{font-size:12px;color:var(--text2);margin-bottom:18px}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card.green-glow{border-color:var(--gbdr);box-shadow:0 0 0 1px rgba(34,197,94,.08)}
+.card.amber-glow{border-color:var(--abdr)}
+.card.red-glow{border-color:var(--rbdr)}
+.ctitle{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+
+/* ── METRIC ── */
+.met{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.met-l{font-size:10px;color:var(--text3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.met-v{font-size:19px;font-weight:700;font-family:monospace;letter-spacing:-.5px}
+.met-s{font-size:11px;margin-top:3px}
+
+/* ── LEVELS ── */
+.lvls{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+.lv{border-radius:var(--rs);padding:8px 10px;text-align:center}
+.lv-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;opacity:.7}
+.lv-v{font-size:14px;font-weight:700;font-family:monospace}
+.lv-s{font-size:9px;margin-top:2px;opacity:.6}
+.lv-entry{background:var(--bbg);border:1px solid var(--bbdr)}.lv-entry .lv-v{color:var(--blue)}
+.lv-sl{background:var(--rbg);border:1px solid var(--rbdr)}.lv-sl .lv-v{color:var(--red)}
+.lv-t1{background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2)}.lv-t1 .lv-v{color:#86efac}
+.lv-t2{background:var(--gbg);border:1px solid var(--gbdr)}.lv-t2 .lv-v{color:var(--green)}
+.lv-ltp{background:var(--bg3);border:1px solid var(--border2)}.lv-ltp .lv-v{color:var(--text)}
+
+/* ── PNL BAR ── */
+.pnl-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:var(--rs);padding:8px 12px;margin-bottom:8px}
+.pnl-lbl{font-size:11px;color:var(--text2)}
+.pnl-val{font-size:15px;font-weight:700;font-family:monospace}
+.prog-wrap{margin-bottom:8px}
+.prog-lbx{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+.prog-tr{height:7px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.prog-fill{height:7px;border-radius:4px;transition:width .5s ease,background .3s}
+
+/* ── TAGS ── */
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.tag{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px}
+.tg{background:var(--gbg);color:#86efac;border:1px solid var(--gbdr)}
+.tr{background:var(--rbg);color:#fca5a5;border:1px solid var(--rbdr)}
+.tb{background:var(--bbg);color:#93c5fd;border:1px solid var(--bbdr)}
+.ta{background:var(--abg);color:#fcd34d;border:1px solid var(--abdr)}
+.tp{background:var(--pbg);color:#c4b5fd;border:1px solid rgba(139,92,246,.3)}
+
+/* ── BUTTONS ── */
+.btn{padding:7px 14px;border-radius:var(--rs);font-size:11px;font-weight:700;cursor:pointer;border:1px solid;font-family:inherit;transition:all .15s;letter-spacing:.02em}
+.btn-g{background:var(--gbg);color:var(--green);border-color:var(--gbdr)}.btn-g:hover{background:rgba(34,197,94,.18)}
+.btn-r{background:var(--rbg);color:var(--red);border-color:var(--rbdr)}.btn-r:hover{background:rgba(239,68,68,.18)}
+.btn-a{background:var(--abg);color:var(--amber);border-color:var(--abdr)}.btn-a:hover{background:rgba(245,158,11,.18)}
+.btn-b{background:var(--bbg);color:var(--blue);border-color:var(--bbdr)}.btn-b:hover{background:rgba(59,130,246,.18)}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue);padding:9px 22px;font-size:13px}.btn-primary:hover{background:#2563eb}
+.btn-row{display:flex;gap:8px;margin-top:10px}
+.btn-row .btn{flex:1}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{padding:7px 10px;text-align:left;color:var(--text3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);font-family:monospace}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr.atm td{background:var(--abg)}
+.cc{color:var(--blue);font-weight:700}.pc{color:var(--green);font-weight:700}
+.sc{text-align:center;font-weight:700;color:var(--text)}
+
+/* ── LOG ── */
+.log-item{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px}
+.log-item:last-child{border-bottom:none}
+.log-t{font-family:monospace;color:var(--text3);min-width:42px;padding-top:1px}
+.log-d{width:7px;height:7px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.log-m{color:var(--text);line-height:1.45;flex:1}
+
+/* ── TABS ── */
+.tab-row{display:flex;gap:6px;margin-bottom:16px}
+.tab-b{padding:7px 18px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .15s;font-family:inherit}
+.tab-b.tnf{background:var(--bbg);color:var(--blue);border-color:var(--bbdr)}
+.tab-b.tbn{background:var(--gbg);color:var(--green);border-color:var(--gbdr)}
+.tab-p{display:none}.tab-p.vis{display:block}
+
+/* ── WINDOW BAR ── */
+.win-bar{margin-bottom:16px}
+.win-lbls{display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:5px}
+.win-tr{height:11px;background:var(--bg3);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.win-fill{height:11px;border-radius:6px;transition:width 1s}
+.win-zones{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px}
+
+/* ── STAT ROW ── */
+.sr{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.sr:last-child{border-bottom:none}
+.sr-k{font-size:12px;color:var(--text2)}
+.sr-v{font-size:12px;font-weight:700;font-family:monospace}
+
+/* ── REFRESH BAR ── */
+.rbar{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:8px 14px;margin-bottom:14px}
+.rbar-l{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.rbar-btn{background:var(--bbg);color:var(--blue);border:1px solid var(--bbdr);border-radius:var(--rs);padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+
+/* ── SETTINGS ── */
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-info .set-name{font-size:13px;font-weight:600}
+.set-info .set-desc{font-size:11px;color:var(--text2);margin-top:2px}
+input[type=number],input[type=text],input[type=password],select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);padding:7px 10px;font-size:12px;font-family:inherit;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--blue)}
+.tog{width:44px;height:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--green2);border-color:var(--green2)}
+.tog-th{width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tog.on .tog-th{left:22px}
+
+/* ── INFO BOXES ── */
+.ibox{border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;border:1px solid}
+.ibox-g{background:var(--gbg);border-color:var(--gbdr);color:#86efac}
+.ibox-a{background:var(--abg);border-color:var(--abdr);color:#fcd34d}
+.ibox-b{background:var(--bbg);border-color:var(--bbdr);color:#93c5fd}
+.ibox-r{background:var(--rbg);border-color:var(--rbdr);color:#fca5a5}
+
+/* ── SCORE RING ── */
+.score-wrap{display:flex;align-items:center;gap:16px;background:var(--bg3);border-radius:var(--r);padding:14px 18px;margin-bottom:14px;border:1px solid var(--border)}
+.ring-box{position:relative;width:68px;height:68px;flex-shrink:0}
+.ring-box svg{transform:rotate(-90deg)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-num{font-size:17px;font-weight:700;font-family:monospace;letter-spacing:-1px}
+.ring-sub{font-size:9px;color:var(--text3)}
+.score-detail{flex:1}
+.score-title{font-size:14px;font-weight:700;margin-bottom:3px}
+.score-body{font-size:11px;color:var(--text2);line-height:1.55}
+
+/* ── LIVE TRADE CARD ── */
+.trade-live-card{background:var(--card);border:1.5px solid var(--gbdr);border-radius:var(--r);padding:14px;margin-bottom:12px;position:relative}
+.trade-live-card::before{content:'';position:absolute;inset:0;border-radius:var(--r);background:linear-gradient(135deg,rgba(34,197,94,.04),transparent);pointer-events:none}
+
+/* ── ORDER STATUS ── */
+.order-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:5px}
+.ob-pending{background:var(--abg);color:var(--amber);border:1px solid var(--abdr)}
+.ob-filled{background:var(--gbg);color:var(--green);border:1px solid var(--gbdr)}
+.ob-rejected{background:var(--rbg);color:var(--red);border:1px solid var(--rbdr)}
+.ob-paper{background:var(--bbg);color:var(--blue);border:1px solid var(--bbdr)}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+
+/* ── SPINNER ── */
+.spin{animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  .shell{grid-template-columns:1fr;grid-template-rows:58px auto 1fr}
+  nav{display:none}.idx-pills{display:none}
+  .g4,.g5{grid-template-columns:repeat(2,1fr)}
+  .lvls{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="shell">
 
+<!-- ══════════════════ HEADER ══════════════════ -->
 <header>
   <div class="logo">
     <div class="logo-icon">⚡</div>
     <div>
-      <div class="logo-text">AutoPilot Trader</div>
-      <div class="logo-sub">Real NSE Data · 9–11 AM</div>
+      <div class="logo-name">AutoPilot Trader</div>
+      <div class="logo-sub">Dhan Live Data · 9–11 AM Option Buying</div>
     </div>
   </div>
-  <div class="topbar-center">
-    <div class="idx-pill" onclick="showPage('signals')">
+
+  <div class="idx-pills">
+    <div class="idx-pill" onclick="nav('signals')">
       <span class="idx-name">NIFTY</span>
-      <span class="idx-price" id="nf-top" style="color:var(--blue)">—</span>
-      <span class="idx-chg" id="nf-top-chg" style="color:var(--text3)">Loading...</span>
+      <span class="idx-val" id="h-nf-val" style="color:var(--blue)">—</span>
+      <span class="idx-chg" id="h-nf-chg" style="color:var(--text3)">connecting…</span>
     </div>
-    <div class="idx-pill" onclick="showPage('signals')">
+    <div class="idx-pill" onclick="nav('signals')">
       <span class="idx-name">BANKNIFTY</span>
-      <span class="idx-price" id="bn-top" style="color:var(--green)">—</span>
-      <span class="idx-chg" id="bn-top-chg" style="color:var(--text3)">Loading...</span>
+      <span class="idx-val" id="h-bn-val" style="color:var(--green)">—</span>
+      <span class="idx-chg" id="h-bn-chg" style="color:var(--text3)">connecting…</span>
     </div>
   </div>
-  <div class="topbar-right">
-    <span class="clock" id="top-clock">--:--:--</span>
-    <div class="data-badge data-loading" id="data-status-badge">
-      <span class="pulse"></span>
-      <span id="data-status-text">Fetching NSE...</span>
+
+  <div class="hdr-right">
+    <div class="clock-box" id="hdr-clock">--:--:--</div>
+    <div class="conn-badge cb-off" id="conn-badge" onclick="nav('settings')">
+      <span class="blink">●</span>
+      <span id="conn-text">Not connected</span>
     </div>
   </div>
 </header>
 
+<!-- ══════════════════ SIDEBAR ══════════════════ -->
 <nav>
-  <div class="nav-label">Dashboard</div>
-  <button class="nav-item active" onclick="showPage('dashboard',this)">📊 Dashboard <span class="nav-badge" id="sig-badge">2</span></button>
-  <button class="nav-item" onclick="showPage('signals',this)">⚡ Live Signals</button>
-  <button class="nav-item" onclick="showPage('trades',this)">📋 Paper Trades</button>
-  <div class="nav-label">Analysis</div>
-  <button class="nav-item" onclick="showPage('oi',this)">📈 OI Analysis</button>
-  <button class="nav-item" onclick="showPage('fii',this)">🏦 FII & Pro Data</button>
-  <button class="nav-item" onclick="showPage('probability',this)">🎯 Probability Engine</button>
-  <div class="nav-label">System</div>
-  <button class="nav-item" onclick="showPage('history',this)">📜 Trade History</button>
-  <button class="nav-item" onclick="showPage('settings',this)">⚙️ Settings</button>
-  <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-    <div style="font-size:11px;color:var(--text3);text-align:center;line-height:1.7">
-      Real NSE data<br>Paper trading only<br>No real money at risk
-    </div>
+  <div class="nav-section">Trading</div>
+  <button class="nav-btn active" id="nb-dashboard" onclick="nav('dashboard',this)">
+    <span class="nav-icon">📊</span>Dashboard<span class="nav-badge" id="sig-count-badge">0</span>
+  </button>
+  <button class="nav-btn" id="nb-signals" onclick="nav('signals',this)">
+    <span class="nav-icon">⚡</span>Live Signals
+  </button>
+  <button class="nav-btn" id="nb-trades" onclick="nav('trades',this)">
+    <span class="nav-icon">📋</span>Paper Trades
+  </button>
+  <button class="nav-btn" id="nb-orders" onclick="nav('orders',this)">
+    <span class="nav-icon">🚀</span>Dhan Orders
+  </button>
+
+  <div class="nav-section">Analysis</div>
+  <button class="nav-btn" id="nb-oi" onclick="nav('oi',this)">
+    <span class="nav-icon">📈</span>OI Analysis
+  </button>
+  <button class="nav-btn" id="nb-fii" onclick="nav('fii',this)">
+    <span class="nav-icon">🏦</span>FII / DII Data
+  </button>
+  <button class="nav-btn" id="nb-probability" onclick="nav('probability',this)">
+    <span class="nav-icon">🎯</span>Probability Engine
+  </button>
+
+  <div class="nav-section">System</div>
+  <button class="nav-btn" id="nb-history" onclick="nav('history',this)">
+    <span class="nav-icon">📜</span>Trade History
+  </button>
+  <button class="nav-btn" id="nb-settings" onclick="nav('settings',this)">
+    <span class="nav-icon">⚙️</span>Settings
+  </button>
+
+  <div class="nav-footer">
+    <span id="mode-footer-lbl" style="color:var(--amber)">Paper Trade Mode</span><br>
+    Dhan API · Real NSE data
   </div>
 </nav>
 
+<!-- ══════════════════ MAIN ══════════════════ -->
 <main>
 
-<!-- DASHBOARD -->
-<div class="page active" id="page-dashboard">
-  <div class="page-title">Dashboard</div>
-  <div class="page-sub" id="dash-date">7 May 2026 · 9–11 AM intraday option buying</div>
+<!-- ─────────── DASHBOARD ─────────── -->
+<div class="page active" id="pg-dashboard">
+  <div class="pg-title">Dashboard</div>
+  <div class="pg-sub" id="dash-date-sub">Loading…</div>
 
-  <div class="refresh-bar">
-    <div class="refresh-left">
-      <span id="refresh-spinner"></span>
-      <span id="refresh-status" style="color:var(--text2)">Connecting to NSE...</span>
-      <span class="next-refresh" id="next-refresh-time"></span>
+  <div class="rbar">
+    <div class="rbar-l">
+      <span id="rbar-spinner"></span>
+      <span id="rbar-status" style="color:var(--text2)">Waiting for Dhan API key in Settings…</span>
+      <span style="font-size:10px;color:var(--text3)" id="rbar-next"></span>
     </div>
-    <button class="refresh-btn" onclick="fetchAllData()">↻ Refresh Now</button>
+    <button class="rbar-btn" onclick="fetchAll()">↻ Refresh</button>
   </div>
 
-  <div class="window-bar">
-    <div class="window-labels">
-      <span>9:00 AM</span>
-      <span id="window-pct-lbl" style="color:var(--green);font-weight:600">0% elapsed</span>
-      <span id="window-status-lbl" style="color:var(--green);font-weight:600">Window OPEN</span>
-      <span>11:00 AM</span>
+  <div class="win-bar">
+    <div class="win-lbls">
+      <span>9:00 AM — Open</span>
+      <span id="win-pct" style="color:var(--green);font-weight:700">0%</span>
+      <span id="win-label" style="color:var(--green);font-weight:700">Window OPEN</span>
+      <span>11:00 AM — Hard Exit</span>
     </div>
-    <div class="window-track"><div class="window-fill" id="window-fill" style="width:0%;background:var(--green)"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:3px">
-      <span>Best entry: 9:15–9:45</span><span style="color:var(--amber)">Caution: 10:30+</span><span style="color:var(--red)">Exit only: 10:45+</span>
-    </div>
+    <div class="win-tr"><div class="win-fill" id="win-fill" style="width:0%;background:var(--green)"></div></div>
+    <div class="win-zones"><span>Best entry 9:15–9:45</span><span style="color:var(--amber)">Caution 10:30+</span><span style="color:var(--red)">Exit only 10:45+</span></div>
   </div>
 
-  <div class="grid5">
-    <div class="metric"><div class="metric-label">Today P&L</div><div class="metric-val" id="dash-pnl" style="color:var(--green)">+₹0</div><div class="metric-sub" style="color:var(--text2)">Paper trades</div></div>
-    <div class="metric"><div class="metric-label">Nifty Spot</div><div class="metric-val" id="dash-nf-spot" style="color:var(--blue)">—</div><div class="metric-sub" id="dash-nf-chg" style="color:var(--text3)">Fetching...</div></div>
-    <div class="metric"><div class="metric-label">BankNifty Spot</div><div class="metric-val" id="dash-bn-spot" style="color:var(--green)">—</div><div class="metric-sub" id="dash-bn-chg" style="color:var(--text3)">Fetching...</div></div>
-    <div class="metric"><div class="metric-label">Nifty PCR</div><div class="metric-val" id="dash-nf-pcr" style="color:var(--text2)">—</div><div class="metric-sub" id="dash-nf-pcr-bias" style="color:var(--text3)">Live from NSE</div></div>
-    <div class="metric"><div class="metric-label">BankNifty PCR</div><div class="metric-val" id="dash-bn-pcr" style="color:var(--text2)">—</div><div class="metric-sub" id="dash-bn-pcr-bias" style="color:var(--text3)">Live from NSE</div></div>
+  <div class="g5">
+    <div class="met"><div class="met-l">Today P&L</div><div class="met-v" id="d-pnl" style="color:var(--green)">+₹0</div><div class="met-s" id="d-mode-lbl" style="color:var(--blue)">Paper mode</div></div>
+    <div class="met"><div class="met-l">Nifty Spot</div><div class="met-v" id="d-nf-spot" style="color:var(--blue)">—</div><div class="met-s" id="d-nf-chg" style="color:var(--text3)">Live from Dhan</div></div>
+    <div class="met"><div class="met-l">BankNifty Spot</div><div class="met-v" id="d-bn-spot" style="color:var(--green)">—</div><div class="met-s" id="d-bn-chg" style="color:var(--text3)">Live from Dhan</div></div>
+    <div class="met"><div class="met-l">Nifty PCR</div><div class="met-v" id="d-nf-pcr">—</div><div class="met-s" id="d-nf-pcr-lbl" style="color:var(--text3)">OI ratio</div></div>
+    <div class="met"><div class="met-l">BNifty PCR</div><div class="met-v" id="d-bn-pcr">—</div><div class="met-s" id="d-bn-pcr-lbl" style="color:var(--text3)">OI ratio</div></div>
   </div>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>NIFTY signal · <span id="nf-prob-badge">—%</span> probability</div>
-      <div class="levels">
-        <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val" id="d-nf-entry">—</div><div class="level-sub">ATM+1 CE</div></div>
-        <div class="level lv-sl"><div class="level-label">SL</div><div class="level-val" id="d-nf-sl">—</div><div class="level-sub">-30%</div></div>
-        <div class="level lv-t1"><div class="level-label">T1</div><div class="level-val" id="d-nf-t1">—</div><div class="level-sub">+40%</div></div>
-        <div class="level lv-t2"><div class="level-label">T2</div><div class="level-val" id="d-nf-t2">—</div><div class="level-sub">+80%</div></div>
-        <div class="level lv-ltp"><div class="level-label">LTP</div><div class="level-val" id="d-nf-ltp">—</div><div class="level-sub" id="d-nf-ltp-chg">—</div></div>
+  <div class="g2">
+    <!-- NIFTY Trade Card -->
+    <div class="card" id="d-nf-card">
+      <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>NIFTY CE Signal &nbsp;<span id="d-nf-prob-lbl" style="font-size:12px;color:var(--text2)">—%</span></div>
+      <div class="lvls">
+        <div class="lv lv-entry"><div class="lv-l">Entry</div><div class="lv-v" id="d-nf-entry">—</div><div class="lv-s">ATM+1</div></div>
+        <div class="lv lv-sl"><div class="lv-l">SL</div><div class="lv-v" id="d-nf-sl">—</div><div class="lv-s">-30%</div></div>
+        <div class="lv lv-t1"><div class="lv-l">T1</div><div class="lv-v" id="d-nf-t1">—</div><div class="lv-s">+40%</div></div>
+        <div class="lv lv-t2"><div class="lv-l">T2</div><div class="lv-v" id="d-nf-t2">—</div><div class="lv-s">+80%</div></div>
+        <div class="lv lv-ltp"><div class="lv-l">Live LTP</div><div class="lv-v" id="d-nf-ltp">—</div><div class="lv-s" id="d-nf-ltp-pct">—</div></div>
       </div>
-      <div class="pnl-row"><span class="pnl-label">Paper P&L (50 units)</span><span class="pnl-val" id="d-nf-pnl" style="color:var(--green)">+₹0</span></div>
-      <div class="prog-wrap"><div class="prog-track"><div class="prog-fill" id="d-nf-bar" style="width:0%;background:var(--amber)"></div></div></div>
+      <div class="pnl-row"><span class="pnl-lbl">Paper P&L · 50 units</span><span class="pnl-val" id="d-nf-pnl">+₹0</span></div>
+      <div class="prog-wrap"><div class="prog-tr"><div class="prog-fill" id="d-nf-bar" style="width:0%"></div></div></div>
       <div class="btn-row">
-        <button class="btn btn-red" onclick="manualExit('NF')">Exit Now</button>
-        <button class="btn btn-amber" onclick="trailSL('NF')">Trail SL</button>
-        <button class="btn btn-blue" onclick="showPage('trades',null)">Details →</button>
+        <button class="btn btn-r" onclick="manualExit('nf')">Exit</button>
+        <button class="btn btn-a" onclick="trailSL('nf')">Trail SL</button>
+        <button class="btn btn-b" onclick="nav('trades')">Details →</button>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>BANKNIFTY signal · <span id="bn-prob-badge">—%</span> probability</div>
-      <div class="levels">
-        <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val" id="d-bn-entry">—</div><div class="level-sub">ATM+1 CE</div></div>
-        <div class="level lv-sl"><div class="level-label">SL</div><div class="level-val" id="d-bn-sl">—</div><div class="level-sub">-30%</div></div>
-        <div class="level lv-t1"><div class="level-label">T1</div><div class="level-val" id="d-bn-t1">—</div><div class="level-sub">+40%</div></div>
-        <div class="level lv-t2"><div class="level-label">T2</div><div class="level-val" id="d-bn-t2">—</div><div class="level-sub">+80%</div></div>
-        <div class="level lv-ltp"><div class="level-label">LTP</div><div class="level-val" id="d-bn-ltp">—</div><div class="level-sub" id="d-bn-ltp-chg">—</div></div>
+
+    <!-- BANKNIFTY Trade Card -->
+    <div class="card" id="d-bn-card">
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>BANKNIFTY CE Signal &nbsp;<span id="d-bn-prob-lbl" style="font-size:12px;color:var(--text2)">—%</span></div>
+      <div class="lvls">
+        <div class="lv lv-entry"><div class="lv-l">Entry</div><div class="lv-v" id="d-bn-entry">—</div><div class="lv-s">ATM+1</div></div>
+        <div class="lv lv-sl"><div class="lv-l">SL</div><div class="lv-v" id="d-bn-sl">—</div><div class="lv-s">-30%</div></div>
+        <div class="lv lv-t1"><div class="lv-l">T1</div><div class="lv-v" id="d-bn-t1">—</div><div class="lv-s">+40%</div></div>
+        <div class="lv lv-t2"><div class="lv-l">T2</div><div class="lv-v" id="d-bn-t2">—</div><div class="lv-s">+80%</div></div>
+        <div class="lv lv-ltp"><div class="lv-l">Live LTP</div><div class="lv-v" id="d-bn-ltp">—</div><div class="lv-s" id="d-bn-ltp-pct">—</div></div>
       </div>
-      <div class="pnl-row"><span class="pnl-label">Paper P&L (15 units)</span><span class="pnl-val" id="d-bn-pnl" style="color:var(--green)">+₹0</span></div>
-      <div class="prog-wrap"><div class="prog-track"><div class="prog-fill" id="d-bn-bar" style="width:0%;background:var(--amber)"></div></div></div>
+      <div class="pnl-row"><span class="pnl-lbl">Paper P&L · 15 units</span><span class="pnl-val" id="d-bn-pnl">+₹0</span></div>
+      <div class="prog-wrap"><div class="prog-tr"><div class="prog-fill" id="d-bn-bar" style="width:0%"></div></div></div>
       <div class="btn-row">
-        <button class="btn btn-red" onclick="manualExit('BN')">Exit Now</button>
-        <button class="btn btn-amber" onclick="trailSL('BN')">Trail SL</button>
-        <button class="btn btn-blue" onclick="showPage('trades',null)">Details →</button>
+        <button class="btn btn-r" onclick="manualExit('bn')">Exit</button>
+        <button class="btn btn-a" onclick="trailSL('bn')">Trail SL</button>
+        <button class="btn btn-b" onclick="nav('trades')">Details →</button>
       </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--blue)"></span>NSE data — last fetch</div>
-    <div id="nse-data-summary" style="color:var(--text2);font-size:13px;text-align:center;padding:12px 0">
-      Connecting to NSE... Please wait.
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Trade log — today</div>
-    <div id="dash-log">
-      <div class="log-entry"><div class="log-time">--:--</div><div class="log-dot" style="background:var(--blue)"></div><div class="log-text">System starting — fetching real NSE data...</div></div>
+    <div class="ctitle"><span class="cdot" style="background:var(--purple)"></span>Trade Log — Today</div>
+    <div id="trade-log">
+      <div class="log-item"><div class="log-t">--:--</div><div class="log-d" style="background:var(--blue)"></div><div class="log-m">System ready. Enter Dhan API credentials in ⚙️ Settings to start.</div></div>
     </div>
   </div>
 </div>
 
-<!-- SIGNALS -->
-<div class="page" id="page-signals">
-  <div class="page-title">Live Signals</div>
-  <div class="page-sub">Real-time NSE data · Signals ≥70% probability only</div>
+<!-- ─────────── SIGNALS ─────────── -->
+<div class="page" id="pg-signals">
+  <div class="pg-title">Live Signals</div>
+  <div class="pg-sub">Real-time data from Dhan API · Only signals ≥70% shown</div>
   <div class="tab-row">
-    <button class="tab-btn active-nf" id="sig-tab-nf" onclick="switchSigTab('nf')">📊 Nifty 50</button>
-    <button class="tab-btn" id="sig-tab-bn" onclick="switchSigTab('bn')">🏦 BankNifty</button>
+    <button class="tab-b tnf" id="st-nf" onclick="switchTab('sig','nf')">📊 Nifty 50</button>
+    <button class="tab-b" id="st-bn" onclick="switchTab('sig','bn')">🏦 BankNifty</button>
   </div>
-  <div class="tab-panel visible" id="sig-panel-nf">
-    <div class="grid4" style="margin-bottom:14px">
-      <div class="metric"><div class="metric-label">Spot</div><div class="metric-val" id="sig-nf-spot" style="color:var(--blue)">—</div><div class="metric-sub" id="sig-nf-spot-chg">Live</div></div>
-      <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" id="sig-nf-pcr">—</div><div class="metric-sub" id="sig-nf-pcr-label">—</div></div>
-      <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val" id="sig-nf-maxpain">—</div><div class="metric-sub" id="sig-nf-maxpain-dist">—</div></div>
-      <div class="metric"><div class="metric-label">IV (ATM)</div><div class="metric-val" id="sig-nf-iv">—</div><div class="metric-sub" id="sig-nf-iv-label">—</div></div>
+
+  <div class="tab-p vis" id="sig-nf">
+    <div class="g4" style="margin-bottom:14px">
+      <div class="met"><div class="met-l">Spot</div><div class="met-v" id="s-nf-spot" style="color:var(--blue)">—</div><div class="met-s" id="s-nf-spot-c" style="color:var(--text3)">Dhan live</div></div>
+      <div class="met"><div class="met-l">PCR (OI)</div><div class="met-v" id="s-nf-pcr">—</div><div class="met-s" id="s-nf-pcr-l" style="color:var(--text3)">—</div></div>
+      <div class="met"><div class="met-l">Max Pain</div><div class="met-v" id="s-nf-mp">—</div><div class="met-s" id="s-nf-mp-d" style="color:var(--text3)">—</div></div>
+      <div class="met"><div class="met-l">ATM IV</div><div class="met-v" id="s-nf-iv">—</div><div class="met-s" id="s-nf-iv-l" style="color:var(--text3)">—</div></div>
     </div>
-    <div class="card signal-fire" id="nf-signal-card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>NIFTY CE Buy Signal · <span id="nf-signal-strike">ATM+1</span></div>
-      <div class="levels">
-        <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val" id="sig-nf-entry">—</div><div class="level-sub">Buy price</div></div>
-        <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val" id="sig-nf-sl">—</div><div class="level-sub">-30%</div></div>
-        <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val" id="sig-nf-t1">—</div><div class="level-sub">+40% book 50%</div></div>
-        <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val" id="sig-nf-t2">—</div><div class="level-sub">+80% full exit</div></div>
-        <div class="level lv-ltp"><div class="level-label">Live LTP</div><div class="level-val" id="sig-nf-ltp">—</div><div class="level-sub" id="sig-nf-ltp-pct">—</div></div>
+    <div class="card green-glow" id="sig-nf-card">
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>NIFTY &nbsp;<span id="sig-nf-strike">—</span>&nbsp;CE Buy &nbsp;<span id="sig-nf-prob-badge" style="color:var(--green);font-size:13px;font-weight:700">—%</span></div>
+      <div class="lvls">
+        <div class="lv lv-entry"><div class="lv-l">Entry</div><div class="lv-v" id="sig-nf-entry">—</div><div class="lv-s">Dhan LTP</div></div>
+        <div class="lv lv-sl"><div class="lv-l">Stop Loss</div><div class="lv-v" id="sig-nf-sl">—</div><div class="lv-s">-30%</div></div>
+        <div class="lv lv-t1"><div class="lv-l">Target 1</div><div class="lv-v" id="sig-nf-t1">—</div><div class="lv-s">+40% book 50%</div></div>
+        <div class="lv lv-t2"><div class="lv-l">Target 2</div><div class="lv-v" id="sig-nf-t2">—</div><div class="lv-s">+80% full exit</div></div>
+        <div class="lv lv-ltp"><div class="lv-l">Live LTP</div><div class="lv-v" id="sig-nf-ltp">—</div><div class="lv-s" id="sig-nf-ltp-p">—</div></div>
       </div>
-      <div class="tags" id="nf-signal-tags"><span class="tag tag-b">Loading NSE data...</span></div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.6" id="nf-signal-reason">Fetching real-time data from NSE option chain...</div>
+      <div class="tags" id="sig-nf-tags"><span class="tag tb">Waiting for data…</span></div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6" id="sig-nf-reason">Connect Dhan API in Settings to see live signals.</div>
     </div>
     <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Probability score — Nifty</div>
-      <div id="nf-prob-detail" style="color:var(--text2);font-size:12px">Loading...</div>
+      <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>Probability Breakdown — Nifty</div>
+      <div id="sig-nf-prob-detail" style="color:var(--text2);font-size:12px;padding:8px 0">Fetching…</div>
     </div>
   </div>
-  <div class="tab-panel" id="sig-panel-bn">
-    <div class="grid4" style="margin-bottom:14px">
-      <div class="metric"><div class="metric-label">Spot</div><div class="metric-val" id="sig-bn-spot" style="color:var(--green)">—</div><div class="metric-sub" id="sig-bn-spot-chg">Live</div></div>
-      <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" id="sig-bn-pcr">—</div><div class="metric-sub" id="sig-bn-pcr-label">—</div></div>
-      <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val" id="sig-bn-maxpain">—</div><div class="metric-sub" id="sig-bn-maxpain-dist">—</div></div>
-      <div class="metric"><div class="metric-label">IV (ATM)</div><div class="metric-val" id="sig-bn-iv">—</div><div class="metric-sub" id="sig-bn-iv-label">—</div></div>
+
+  <div class="tab-p" id="sig-bn">
+    <div class="g4" style="margin-bottom:14px">
+      <div class="met"><div class="met-l">Spot</div><div class="met-v" id="s-bn-spot" style="color:var(--green)">—</div><div class="met-s" id="s-bn-spot-c" style="color:var(--text3)">Dhan live</div></div>
+      <div class="met"><div class="met-l">PCR (OI)</div><div class="met-v" id="s-bn-pcr">—</div><div class="met-s" id="s-bn-pcr-l" style="color:var(--text3)">—</div></div>
+      <div class="met"><div class="met-l">Max Pain</div><div class="met-v" id="s-bn-mp">—</div><div class="met-s" id="s-bn-mp-d" style="color:var(--text3)">—</div></div>
+      <div class="met"><div class="met-l">ATM IV</div><div class="met-v" id="s-bn-iv">—</div><div class="met-s" id="s-bn-iv-l" style="color:var(--text3)">—</div></div>
     </div>
-    <div class="card signal-fire" id="bn-signal-card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>BANKNIFTY CE Buy Signal · <span id="bn-signal-strike">ATM+1</span></div>
-      <div class="levels">
-        <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val" id="sig-bn-entry">—</div><div class="level-sub">Buy price</div></div>
-        <div class="level lv-sl"><div class="level-label">Stop Loss</div><div class="level-val" id="sig-bn-sl">—</div><div class="level-sub">-30%</div></div>
-        <div class="level lv-t1"><div class="level-label">Target 1</div><div class="level-val" id="sig-bn-t1">—</div><div class="level-sub">+40% book 50%</div></div>
-        <div class="level lv-t2"><div class="level-label">Target 2</div><div class="level-val" id="sig-bn-t2">—</div><div class="level-sub">+80% full exit</div></div>
-        <div class="level lv-ltp"><div class="level-label">Live LTP</div><div class="level-val" id="sig-bn-ltp">—</div><div class="level-sub" id="sig-bn-ltp-pct">—</div></div>
+    <div class="card green-glow" id="sig-bn-card">
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>BANKNIFTY &nbsp;<span id="sig-bn-strike">—</span>&nbsp;CE Buy &nbsp;<span id="sig-bn-prob-badge" style="color:var(--green);font-size:13px;font-weight:700">—%</span></div>
+      <div class="lvls">
+        <div class="lv lv-entry"><div class="lv-l">Entry</div><div class="lv-v" id="sig-bn-entry">—</div><div class="lv-s">Dhan LTP</div></div>
+        <div class="lv lv-sl"><div class="lv-l">Stop Loss</div><div class="lv-v" id="sig-bn-sl">—</div><div class="lv-s">-30%</div></div>
+        <div class="lv lv-t1"><div class="lv-l">Target 1</div><div class="lv-v" id="sig-bn-t1">—</div><div class="lv-s">+40% book 50%</div></div>
+        <div class="lv lv-t2"><div class="lv-l">Target 2</div><div class="lv-v" id="sig-bn-t2">—</div><div class="lv-s">+80% full exit</div></div>
+        <div class="lv lv-ltp"><div class="lv-l">Live LTP</div><div class="lv-v" id="sig-bn-ltp">—</div><div class="lv-s" id="sig-bn-ltp-p">—</div></div>
       </div>
-      <div class="tags" id="bn-signal-tags"><span class="tag tag-b">Loading NSE data...</span></div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.6" id="bn-signal-reason">Fetching real-time data from NSE option chain...</div>
+      <div class="tags" id="sig-bn-tags"><span class="tag tb">Waiting for data…</span></div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.6" id="sig-bn-reason">Connect Dhan API in Settings to see live signals.</div>
     </div>
   </div>
 </div>
 
-<!-- PAPER TRADES -->
-<div class="page" id="page-trades">
-  <div class="page-title">Paper Trades</div>
-  <div class="page-sub">Live simulation using real NSE prices — no real money</div>
-  <div class="warn-box" id="trades-warn">⚠️ No trades fired yet. Waiting for NSE data and 70%+ probability signal.</div>
-  <div id="trades-container"></div>
+<!-- ─────────── PAPER TRADES ─────────── -->
+<div class="page" id="pg-trades">
+  <div class="pg-title">Paper Trades</div>
+  <div class="pg-sub">Live simulation using real Dhan prices — no real money</div>
+  <div class="ibox ibox-a" id="trades-warn">⚠️ No trades fired yet. Waiting for live data and 70%+ probability signal.</div>
+  <div id="trades-cards"></div>
   <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Capital summary</div>
-    <div class="stat-row"><span class="stat-key">Total deployed today</span><span class="stat-val" id="cap-deployed">₹0</span></div>
-    <div class="stat-row"><span class="stat-key">Worst case (both SL)</span><span class="stat-val" id="cap-worst" style="color:var(--red)">₹0</span></div>
-    <div class="stat-row"><span class="stat-key">Best case (both T2)</span><span class="stat-val" id="cap-best" style="color:var(--green)">₹0</span></div>
-    <div class="stat-row"><span class="stat-key">Current paper P&L</span><span class="stat-val" id="cap-pnl" style="color:var(--green)">+₹0</span></div>
+    <div class="ctitle"><span class="cdot" style="background:var(--amber)"></span>Capital Summary</div>
+    <div class="sr"><span class="sr-k">Total deployed</span><span class="sr-v" id="cap-deployed">₹0</span></div>
+    <div class="sr"><span class="sr-k">Max loss (both SL)</span><span class="sr-v" style="color:var(--red)" id="cap-worst">−₹0</span></div>
+    <div class="sr"><span class="sr-k">Max profit (both T2)</span><span class="sr-v" style="color:var(--green)" id="cap-best">+₹0</span></div>
+    <div class="sr"><span class="sr-k">Current paper P&L</span><span class="sr-v" id="cap-pnl" style="color:var(--green)">+₹0</span></div>
     <div class="btn-row" style="margin-top:12px">
-      <button class="btn btn-red" style="flex:2" onclick="exitAll()">🚨 Exit ALL at Market</button>
+      <button class="btn btn-r" style="flex:2" onclick="exitAll()">🚨 Exit ALL Trades</button>
     </div>
   </div>
 </div>
 
-<!-- OI ANALYSIS -->
-<div class="page" id="page-oi">
-  <div class="page-title">OI Analysis</div>
-  <div class="page-sub">Real option chain data from NSE — refreshed every 3 minutes</div>
+<!-- ─────────── DHAN ORDERS ─────────── -->
+<div class="page" id="pg-orders">
+  <div class="pg-title">Dhan Orders</div>
+  <div class="pg-sub">Real order execution via Dhan API</div>
+  <div class="ibox ibox-b">ℹ️ Orders placed here are REAL and go to your Dhan account. Paper trade first in the Paper Trades section before using live orders.</div>
+  <div class="g2">
+    <div class="card">
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>Quick Order — Nifty CE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">SECURITY ID (Dhan Code)</div><input type="text" id="ord-nf-secid" placeholder="e.g. 35001" style="width:100%" id="ord-nf-sec"></div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">QUANTITY (Lots × 50)</div><input type="number" id="ord-nf-qty" value="50" style="width:100%"></div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">ORDER TYPE</div>
+          <select id="ord-nf-type" style="width:100%"><option value="MARKET">MARKET</option><option value="LIMIT">LIMIT</option></select>
+        </div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">LIMIT PRICE (for LIMIT orders)</div><input type="number" id="ord-nf-price" placeholder="0" style="width:100%"></div>
+        <div class="btn-row">
+          <button class="btn btn-g" onclick="placeDhanOrder('nf','BUY')">BUY CE</button>
+          <button class="btn btn-r" onclick="placeDhanOrder('nf','SELL')">SELL CE</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>Quick Order — BankNifty CE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">SECURITY ID (Dhan Code)</div><input type="text" id="ord-bn-secid" placeholder="e.g. 35002" style="width:100%"></div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">QUANTITY (Lots × 15)</div><input type="number" id="ord-bn-qty" value="15" style="width:100%"></div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">ORDER TYPE</div>
+          <select id="ord-bn-type" style="width:100%"><option value="MARKET">MARKET</option><option value="LIMIT">LIMIT</option></select>
+        </div>
+        <div><div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">LIMIT PRICE (for LIMIT orders)</div><input type="number" id="ord-bn-price" placeholder="0" style="width:100%"></div>
+        <div class="btn-row">
+          <button class="btn btn-g" onclick="placeDhanOrder('bn','BUY')">BUY CE</button>
+          <button class="btn btn-r" onclick="placeDhanOrder('bn','SELL')">SELL CE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ctitle"><span class="cdot" style="background:var(--purple)"></span>Order Book — Today</div>
+    <div id="order-book-list"><div style="text-align:center;padding:20px;color:var(--text2)">No orders placed today.</div></div>
+  </div>
+  <div class="card">
+    <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>Portfolio Positions</div>
+    <div id="positions-list"><div style="text-align:center;padding:20px;color:var(--text2)">Click "Fetch Positions" to load from Dhan.</div></div>
+    <button class="btn btn-b" onclick="fetchPositions()" style="margin-top:10px">Fetch Positions from Dhan</button>
+  </div>
+</div>
+
+<!-- ─────────── OI ANALYSIS ─────────── -->
+<div class="page" id="pg-oi">
+  <div class="pg-title">OI Analysis</div>
+  <div class="pg-sub">Live option chain from Dhan API — refreshed every 3 minutes</div>
   <div class="tab-row">
-    <button class="tab-btn active-nf" id="oi-tab-nf" onclick="switchOITab('nf')">📊 Nifty 50</button>
-    <button class="tab-btn" id="oi-tab-bn" onclick="switchOITab('bn')">🏦 BankNifty</button>
+    <button class="tab-b tnf" id="ot-nf" onclick="switchTab('oi','nf')">📊 Nifty 50</button>
+    <button class="tab-b" id="ot-bn" onclick="switchTab('oi','bn')">🏦 BankNifty</button>
   </div>
-  <div class="tab-panel visible" id="oi-panel-nf">
-    <div class="grid4" style="margin-bottom:14px">
-      <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" id="oi-nf-pcr">—</div><div class="metric-sub" id="oi-nf-pcr-lbl">—</div></div>
-      <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val" id="oi-nf-mp">—</div><div class="metric-sub" id="oi-nf-mp-lbl">—</div></div>
-      <div class="metric"><div class="metric-label">Top Put Wall</div><div class="metric-val" id="oi-nf-pw" style="color:var(--green)">—</div><div class="metric-sub">Support</div></div>
-      <div class="metric"><div class="metric-label">Top Call Wall</div><div class="metric-val" id="oi-nf-cw" style="color:var(--red)">—</div><div class="metric-sub">Resistance</div></div>
+  <div class="tab-p vis" id="oi-nf">
+    <div class="g4" style="margin-bottom:14px">
+      <div class="met"><div class="met-l">PCR (OI)</div><div class="met-v" id="oi-nf-pcr">—</div><div class="met-s" id="oi-nf-pcr-l">—</div></div>
+      <div class="met"><div class="met-l">Max Pain</div><div class="met-v" id="oi-nf-mp">—</div><div class="met-s" id="oi-nf-mp-l">—</div></div>
+      <div class="met"><div class="met-l">Put Wall</div><div class="met-v" id="oi-nf-pw" style="color:var(--green)">—</div><div class="met-s">Support</div></div>
+      <div class="met"><div class="met-l">Call Wall</div><div class="met-v" id="oi-nf-cw" style="color:var(--red)">—</div><div class="met-s">Resistance</div></div>
+    </div>
+    <div class="card"><div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>Option Chain — Nifty (Dhan live)</div><div id="oi-nf-tbl"><div style="text-align:center;padding:20px;color:var(--text2)">Fetching…</div></div></div>
+  </div>
+  <div class="tab-p" id="oi-bn">
+    <div class="g4" style="margin-bottom:14px">
+      <div class="met"><div class="met-l">PCR (OI)</div><div class="met-v" id="oi-bn-pcr">—</div><div class="met-s" id="oi-bn-pcr-l">—</div></div>
+      <div class="met"><div class="met-l">Max Pain</div><div class="met-v" id="oi-bn-mp">—</div><div class="met-s" id="oi-bn-mp-l">—</div></div>
+      <div class="met"><div class="met-l">Put Wall</div><div class="met-v" id="oi-bn-pw" style="color:var(--green)">—</div><div class="met-s">Support</div></div>
+      <div class="met"><div class="met-l">Call Wall</div><div class="met-v" id="oi-bn-cw" style="color:var(--red)">—</div><div class="met-s">Resistance</div></div>
+    </div>
+    <div class="card"><div class="ctitle"><span class="cdot" style="background:var(--green)"></span>Option Chain — BankNifty (Dhan live)</div><div id="oi-bn-tbl"><div style="text-align:center;padding:20px;color:var(--text2)">Fetching…</div></div></div>
+  </div>
+</div>
+
+<!-- ─────────── FII / DII ─────────── -->
+<div class="page" id="pg-fii">
+  <div class="pg-title">FII / DII Data</div>
+  <div class="pg-sub">Institutional flow — sourced via Dhan market data</div>
+  <div class="ibox ibox-b">💡 Follow FII — if FII net long in futures = buy calls. FII net short = buy puts. Always follow Pro desk, never retail.</div>
+  <div class="g2">
+    <div class="card">
+      <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>FII Activity</div>
+      <div id="fii-data-block"><div style="text-align:center;padding:16px;color:var(--text2)">Fetching from Dhan…</div></div>
     </div>
     <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Option Chain — Nifty (live NSE)</div>
-      <div id="oi-nf-table-wrap"><div style="text-align:center;padding:20px;color:var(--text2)">Loading option chain from NSE...</div></div>
-    </div>
-  </div>
-  <div class="tab-panel" id="oi-panel-bn">
-    <div class="grid4" style="margin-bottom:14px">
-      <div class="metric"><div class="metric-label">PCR (OI)</div><div class="metric-val" id="oi-bn-pcr">—</div><div class="metric-sub" id="oi-bn-pcr-lbl">—</div></div>
-      <div class="metric"><div class="metric-label">Max Pain</div><div class="metric-val" id="oi-bn-mp">—</div><div class="metric-sub" id="oi-bn-mp-lbl">—</div></div>
-      <div class="metric"><div class="metric-label">Top Put Wall</div><div class="metric-val" id="oi-bn-pw" style="color:var(--green)">—</div><div class="metric-sub">Support</div></div>
-      <div class="metric"><div class="metric-label">Top Call Wall</div><div class="metric-val" id="oi-bn-cw" style="color:var(--red)">—</div><div class="metric-sub">Resistance</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>Option Chain — BankNifty (live NSE)</div>
-      <div id="oi-bn-table-wrap"><div style="text-align:center;padding:20px;color:var(--text2)">Loading option chain from NSE...</div></div>
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>Signal Interpretation</div>
+      <div class="sr"><span class="sr-k">FII net futures</span><span class="sr-v" id="fii-net-v">—</span></div>
+      <div class="sr"><span class="sr-k">CE buy signal</span><span class="sr-v" id="fii-ce-s">—</span></div>
+      <div class="sr"><span class="sr-k">PE buy signal</span><span class="sr-v" id="fii-pe-s">—</span></div>
+      <div class="sr"><span class="sr-k">Overall bias</span><span class="sr-v" id="fii-bias">—</span></div>
+      <div class="sr"><span class="sr-k">DII net</span><span class="sr-v" id="dii-net-v">—</span></div>
+      <div class="sr"><span class="sr-k">Combined verdict</span><span class="sr-v" id="fii-combined">—</span></div>
     </div>
   </div>
 </div>
 
-<!-- FII DATA -->
-<div class="page" id="page-fii">
-  <div class="page-title">FII & Pro Data</div>
-  <div class="page-sub">Institutional activity — fetched from NSE</div>
-  <div class="info-box">💡 FII net long in futures = buy calls. FII net short = buy puts. Follow Pro desk, not retail.</div>
-  <div class="grid2">
+<!-- ─────────── PROBABILITY ─────────── -->
+<div class="page" id="pg-probability">
+  <div class="pg-title">Probability Engine</div>
+  <div class="pg-sub">Scores calculated live from real Dhan data · Min 70% to fire signal</div>
+  <div class="g2">
     <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>FII activity</div>
-      <div id="fii-data-display"><div style="text-align:center;padding:16px;color:var(--text2)">Fetching from NSE...</div></div>
+      <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>Nifty Score Breakdown</div>
+      <div id="prob-nf-breakdown" style="color:var(--text2);font-size:12px">Waiting for data…</div>
     </div>
     <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>FII signal interpretation</div>
-      <div class="stat-row"><span class="stat-key">FII Net Futures</span><span class="stat-val" id="fii-net-fut" style="color:var(--text2)">—</span></div>
-      <div class="stat-row"><span class="stat-key">Signal for CE buy</span><span class="stat-val" id="fii-ce-signal">—</span></div>
-      <div class="stat-row"><span class="stat-key">Signal for PE buy</span><span class="stat-val" id="fii-pe-signal">—</span></div>
-      <div class="stat-row"><span class="stat-key">Overall bias</span><span class="stat-val" id="fii-overall-bias">—</span></div>
-    </div>
-  </div>
-</div>
-
-<!-- PROBABILITY ENGINE -->
-<div class="page" id="page-probability">
-  <div class="page-title">Probability Engine</div>
-  <div class="page-sub">Scores calculated live from real NSE data — 70% minimum to fire</div>
-  <div class="grid2">
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>Nifty score breakdown</div>
-      <div id="nf-prob-breakdown"><div style="color:var(--text2);font-size:12px">Loading...</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>BankNifty score breakdown</div>
-      <div id="bn-prob-breakdown"><div style="color:var(--text2);font-size:12px">Loading...</div></div>
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>BankNifty Score Breakdown</div>
+      <div id="prob-bn-breakdown" style="color:var(--text2);font-size:12px">Waiting for data…</div>
     </div>
   </div>
   <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Scoring rules</div>
-    <div class="stat-row"><span class="stat-key">OI Direction</span><span class="stat-val">25 pts — PCR trend + put wall</span></div>
-    <div class="stat-row"><span class="stat-key">PCR Value</span><span class="stat-val">20 pts — above 1.0 = bullish</span></div>
-    <div class="stat-row"><span class="stat-key">Max Pain Position</span><span class="stat-val">20 pts — spot above max pain</span></div>
-    <div class="stat-row"><span class="stat-key">IV Environment</span><span class="stat-val">20 pts — moderate IV favors buying</span></div>
-    <div class="stat-row"><span class="stat-key">Market Trend</span><span class="stat-val">15 pts — spot change direction</span></div>
-    <div class="stat-row"><span class="stat-key">Minimum to fire</span><span class="stat-val" style="color:var(--green)">70 / 100</span></div>
+    <div class="ctitle"><span class="cdot" style="background:var(--amber)"></span>Scoring Formula</div>
+    <div class="sr"><span class="sr-k">PCR Direction (25 pts)</span><span class="sr-v">PCR ≥1.2 = 25pts · ≥1.0 = 18 · else ≤10</span></div>
+    <div class="sr"><span class="sr-k">Max Pain (20 pts)</span><span class="sr-v">Spot 200+ above pain = 20pts</span></div>
+    <div class="sr"><span class="sr-k">IV Environment (20 pts)</span><span class="sr-v">10–35% IV range = ideal for buying</span></div>
+    <div class="sr"><span class="sr-k">Spot Trend (15 pts)</span><span class="sr-v">+0.2% or more change = 15pts</span></div>
+    <div class="sr"><span class="sr-k">FII Bias (10 pts)</span><span class="sr-v">FII net long = +10 bonus pts</span></div>
+    <div class="sr"><span class="sr-k">OI Momentum (10 pts)</span><span class="sr-v">CE OI falling at ATM = short covering</span></div>
+    <div class="sr" style="border-top:2px solid var(--border2);margin-top:4px"><span class="sr-k" style="font-weight:700;color:var(--text)">Minimum to fire trade</span><span class="sr-v" style="color:var(--green);font-size:14px">70 / 100</span></div>
   </div>
 </div>
 
-<!-- HISTORY -->
-<div class="page" id="page-history">
-  <div class="page-title">Trade History</div>
-  <div class="page-sub">All completed paper trades</div>
-  <div class="grid4" style="margin-bottom:14px">
-    <div class="metric"><div class="metric-label">Total trades</div><div class="metric-val" id="hist-count">0</div></div>
-    <div class="metric"><div class="metric-label">Wins</div><div class="metric-val" id="hist-wins" style="color:var(--green)">0</div></div>
-    <div class="metric"><div class="metric-label">Losses</div><div class="metric-val" id="hist-losses" style="color:var(--red)">0</div></div>
-    <div class="metric"><div class="metric-label">Total P&L</div><div class="metric-val" id="hist-pnl">+₹0</div></div>
+<!-- ─────────── HISTORY ─────────── -->
+<div class="page" id="pg-history">
+  <div class="pg-title">Trade History</div>
+  <div class="pg-sub">All completed paper trades — track your performance</div>
+  <div class="g4" style="margin-bottom:14px">
+    <div class="met"><div class="met-l">Total Trades</div><div class="met-v" id="hist-total">0</div></div>
+    <div class="met"><div class="met-l">Winners</div><div class="met-v" id="hist-wins" style="color:var(--green)">0</div></div>
+    <div class="met"><div class="met-l">Losers</div><div class="met-v" id="hist-losses" style="color:var(--red)">0</div></div>
+    <div class="met"><div class="met-l">Total P&L</div><div class="met-v" id="hist-pnl">+₹0</div></div>
   </div>
-  <div class="card"><div id="history-list" style="color:var(--text2);font-size:13px;text-align:center;padding:24px 0">No completed trades yet.</div></div>
+  <div class="card"><div id="hist-list" style="text-align:center;padding:24px;color:var(--text2)">No completed trades yet.</div></div>
 </div>
 
-<!-- SETTINGS -->
-<div class="page" id="page-settings">
-  <div class="page-title">Settings</div>
-  <div class="page-sub">Configure autopilot rules and data refresh</div>
+<!-- ─────────── SETTINGS ─────────── -->
+<div class="page" id="pg-settings">
+  <div class="pg-title">⚙️ Settings</div>
+  <div class="pg-sub">Configure Dhan API and trading rules</div>
+
+  <div class="ibox ibox-b">ℹ️ Your API credentials are stored only in your browser (localStorage). They are never sent anywhere except directly to Dhan's official API at <strong>api.dhan.co</strong></div>
+
   <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--blue)"></span>NSE data settings</div>
-    <div class="setting-row">
-      <div><div class="setting-name">Data refresh interval</div><div class="setting-desc">How often to fetch from NSE (default: 3 minutes)</div></div>
-      <select id="s-refresh"><option value="1">Every 1 minute</option><option value="3" selected>Every 3 minutes</option><option value="5">Every 5 minutes</option></select>
+    <div class="ctitle"><span class="cdot" style="background:var(--blue)"></span>🔑 Dhan API Credentials</div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Client ID</div><div class="set-desc">Your Dhan client/user ID</div></div>
+      <input type="text" id="s-client-id" placeholder="Enter Dhan Client ID" style="width:240px">
     </div>
-    <div class="setting-row">
-      <div><div class="setting-name">Auto-fetch on open</div><div class="setting-desc">Fetch NSE data automatically when app loads</div></div>
-      <div class="toggle on" id="toggle-autofetch" onclick="toggleSetting('autofetch')"><div class="toggle-thumb"></div></div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Access Token</div><div class="set-desc">Dhan API access token (from dhan.co → API section)</div></div>
+      <input type="password" id="s-access-token" placeholder="Enter access token" style="width:240px">
+    </div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Trade Mode</div><div class="set-desc">Paper = simulate only · Live = real Dhan orders</div></div>
+      <select id="s-trade-mode" style="width:180px" onchange="updateMode()">
+        <option value="paper" selected>📋 Paper Trade</option>
+        <option value="live">🚀 Live (Real Orders)</option>
+      </select>
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn-primary btn" onclick="saveCredentials()">💾 Save & Connect</button>
+      <button class="btn btn-b" onclick="testDhanConnection()">🔌 Test Connection</button>
+      <button class="btn btn-r" onclick="clearCredentials()">🗑 Clear</button>
+    </div>
+    <div id="creds-status" style="margin-top:10px;font-size:12px;color:var(--text2)"></div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle"><span class="cdot" style="background:var(--amber)"></span>⏱ Data & Refresh</div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Auto-refresh interval</div><div class="set-desc">How often to fetch live data from Dhan</div></div>
+      <select id="s-refresh" style="width:160px">
+        <option value="60">Every 1 minute</option>
+        <option value="180" selected>Every 3 minutes</option>
+        <option value="300">Every 5 minutes</option>
+      </select>
+    </div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Hard exit time</div><div class="set-desc">Auto-square all positions at this time (default 11:00)</div></div>
+      <input type="text" id="s-exit-time" value="11:00" style="width:80px">
+    </div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">No new entries after</div><div class="set-desc">Block all entries after this time (default 10:45)</div></div>
+      <input type="text" id="s-no-entry" value="10:45" style="width:80px">
     </div>
   </div>
+
   <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--amber)"></span>Trading rules</div>
-    <div class="setting-row">
-      <div><div class="setting-name">Minimum probability</div><div class="setting-desc">Only fire signals above this score</div></div>
-      <input type="number" value="70" min="50" max="95" style="width:80px" id="s-prob">
+    <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>📐 Strategy Rules</div>
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Min probability to fire</div><div class="set-desc">Only trade when score ≥ this (default 70)</div></div>
+      <input type="number" id="s-min-prob" value="70" min="50" max="95" style="width:80px">
     </div>
-    <div class="setting-row">
-      <div><div class="setting-name">Stop loss %</div><div class="setting-desc">Exit if option loses this % (default 30%)</div></div>
-      <input type="number" value="30" min="15" max="50" style="width:80px" id="s-sl">
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Stop loss %</div><div class="set-desc">Exit if option drops this % below entry (default 30)</div></div>
+      <input type="number" id="s-sl-pct" value="30" min="10" max="50" style="width:80px">
     </div>
-    <div class="setting-row">
-      <div><div class="setting-name">Target 1 %</div><div class="setting-desc">Book 50% at this gain (default 40%)</div></div>
-      <input type="number" value="40" min="20" max="100" style="width:80px" id="s-t1">
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Target 1 % (book 50%)</div><div class="set-desc">Partial exit at this gain (default 40)</div></div>
+      <input type="number" id="s-t1-pct" value="40" min="15" max="100" style="width:80px">
     </div>
-    <div class="setting-row">
-      <div><div class="setting-name">Target 2 %</div><div class="setting-desc">Full exit at this gain (default 80%)</div></div>
-      <input type="number" value="80" min="40" max="200" style="width:80px" id="s-t2">
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Target 2 % (full exit)</div><div class="set-desc">Full exit at this gain (default 80)</div></div>
+      <input type="number" id="s-t2-pct" value="80" min="30" max="300" style="width:80px">
     </div>
-    <div class="setting-row">
-      <div><div class="setting-name">Hard exit time</div><div class="setting-desc">Auto-exit all positions at this time</div></div>
-      <input type="text" value="11:00" style="width:80px" id="s-exit-time">
+    <div class="set-row">
+      <div class="set-info"><div class="set-name">Auto trail SL at T1</div><div class="set-desc">Move SL to entry price when T1 is hit</div></div>
+      <div class="tog on" id="tog-trail" onclick="toggleSetting('trail')"><div class="tog-th"></div></div>
     </div>
-    <div class="btn-row" style="margin-top:12px">
-      <button class="btn btn-green" onclick="addLog('var(--green)','Settings saved successfully')">Save Settings</button>
-      <button class="btn btn-blue" onclick="fetchAllData()">Test NSE Connection</button>
+  </div>
+
+  <div class="card">
+    <div class="ctitle"><span class="cdot" style="background:var(--red)"></span>🔗 How to get Dhan API credentials</div>
+    <div style="font-size:12px;color:var(--text2);line-height:2">
+      1. Log in to your Dhan account at <strong style="color:var(--text)">dhan.co</strong><br>
+      2. Go to <strong style="color:var(--text)">Profile → API</strong> (or search "API" in settings)<br>
+      3. Click <strong style="color:var(--text)">"Create API"</strong> or <strong style="color:var(--text)">"Generate Token"</strong><br>
+      4. Copy your <strong style="color:var(--text)">Client ID</strong> and <strong style="color:var(--text)">Access Token</strong><br>
+      5. Paste them above and click <strong style="color:var(--text)">"Save & Connect"</strong><br>
+      6. Click <strong style="color:var(--text)">"Test Connection"</strong> to verify it works<br>
+      7. Switch to <strong style="color:var(--green)">Live mode</strong> when you are confident
     </div>
   </div>
 </div>
 
 </main>
-</div>
+</div><!-- end .shell -->
 
+<!-- ══════════════════ JAVASCRIPT ══════════════════ -->
 <script>
-// ===================== STATE =====================
-const STATE = {
-  nf: { spot:0, prevSpot:0, pcr:0, maxPain:0, iv:0, putWall:0, callWall:0, prob:0,
-        entryPrice:0, slPrice:0, t1Price:0, t2Price:0, ltp:0, sl:0, active:false, strike:0 },
-  bn: { spot:0, prevSpot:0, pcr:0, maxPain:0, iv:0, putWall:0, callWall:0, prob:0,
-        entryPrice:0, slPrice:0, t1Price:0, t2Price:0, ltp:0, sl:0, active:false, strike:0 },
-  fii: { buyVal:0, sellVal:0, net:0 },
-  lastFetch: null, fetchCount: 0, nextFetchIn: 180,
-  history: [], histPnl: 0
+'use strict';
+
+// ─── CONFIG ───
+const DHAN_BASE = 'https://api.dhan.co';
+const NIFTY_SEC_ID  = '13';    // Dhan security ID for Nifty 50 index
+const BANKNIFTY_SEC_ID = '25'; // Dhan security ID for BankNifty
+
+// Dhan exchange / segment codes
+const EX_NSE_FO = 'NSE_FO';
+const EX_NSE_EQ = 'NSE';
+const IDX_TYPE  = 'INDEX';
+const OPT_TYPE  = 'OPTIDX';
+
+// ─── STATE ───
+const S = {
+  creds: { clientId:'', token:'' },
+  mode: 'paper',
+  nf: { spot:0, prev:0, pcr:0, maxPain:0, iv:0, putWall:0, callWall:0,
+        strike:0, entryPrice:0, ltp:0, sl:0, t1:0, t2:0, prob:0,
+        active:false, oiRows:[], expiry:'', fiiNet:0 },
+  bn: { spot:0, prev:0, pcr:0, maxPain:0, iv:0, putWall:0, callWall:0,
+        strike:0, entryPrice:0, ltp:0, sl:0, t1:0, t2:0, prob:0,
+        active:false, oiRows:[], expiry:'', fiiNet:0 },
+  fii: { buyVal:0, sellVal:0, net:0, diiNet:0 },
+  lastFetch: null, fetchCount:0, nextIn:180, connected:false,
+  history:[], histPnl:0, orders:[],
+  toggles: { trail:true }
 };
 
-const SETTINGS = { refreshMin:3, minProb:70, slPct:30, t1Pct:40, t2Pct:80 };
-const toggleState = { autofetch: true };
+// ─── INIT ───
+window.addEventListener('DOMContentLoaded', () => {
+  loadCreds();
+  setInterval(tickClock, 1000);
+  setInterval(() => {
+    if (S.connected && --S.nextIn <= 0) { fetchAll(); S.nextIn = parseInt(document.getElementById('s-refresh').value) || 180; }
+    setText('rbar-next', S.connected ? `Next fetch in ${S.nextIn}s` : '');
+  }, 1000);
+  tickClock();
+  updateDateSub();
+});
 
-// ===================== CLOCK =====================
-let simMin = 0, simSec = 0;
-function updateClock() {
-  const now = new Date();
-  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-  document.getElementById('top-clock').textContent = pad(h)+':'+pad(m)+':'+pad(s);
-
-  // Window progress based on real time
-  const totalMinutes = (h - 9) * 60 + m;
-  const pct = Math.min(100, Math.max(0, (totalMinutes / 120) * 100));
-  document.getElementById('window-fill').style.width = pct + '%';
-  document.getElementById('window-pct-lbl').textContent = Math.round(pct) + '% elapsed';
-
-  const wsl = document.getElementById('window-status-lbl');
-  const wf = document.getElementById('window-fill');
-  if (h < 9) { wsl.textContent = 'Not open yet'; wsl.style.color='var(--text2)'; wf.style.background='var(--text3)'; }
-  else if (h === 9 && m < 15) { wsl.textContent = 'Wait — first 15 min'; wsl.style.color='var(--amber)'; wf.style.background='var(--amber)'; }
-  else if (totalMinutes < 90) { wsl.textContent = 'Window OPEN'; wsl.style.color='var(--green)'; wf.style.background='var(--green)'; }
-  else if (totalMinutes < 105) { wsl.textContent = 'Caution zone'; wsl.style.color='var(--amber)'; wf.style.background='var(--amber)'; }
-  else if (totalMinutes < 120) { wsl.textContent = 'Exit only'; wsl.style.color='var(--red)'; wf.style.background='var(--red)'; }
-  else { wsl.textContent = 'CLOSED'; wsl.style.color='var(--red)'; wf.style.background='var(--red)'; }
-
-  // Countdown to next fetch
-  if (STATE.nextFetchIn > 0) {
-    STATE.nextFetchIn--;
-    const nm = document.getElementById('next-refresh-time');
-    if (nm) nm.textContent = `Next fetch in ${STATE.nextFetchIn}s`;
-    if (STATE.nextFetchIn <= 0) { fetchAllData(); STATE.nextFetchIn = SETTINGS.refreshMin * 60; }
-  }
+function loadCreds() {
+  const cid = localStorage.getItem('dhan_client_id') || '';
+  const tok = localStorage.getItem('dhan_token') || '';
+  if (cid) document.getElementById('s-client-id').value = cid;
+  if (tok) document.getElementById('s-access-token').value = tok;
+  S.creds = { clientId: cid, token: tok };
+  S.mode  = localStorage.getItem('dhan_mode') || 'paper';
+  document.getElementById('s-trade-mode').value = S.mode;
+  updateMode();
+  if (cid && tok) { S.connected = true; setConnBadge('ok','Dhan Connected'); fetchAll(); }
+  else { setConnBadge('off','Enter API key →'); }
 }
-function pad(n){ return String(n).padStart(2,'0'); }
 
-// ===================== NSE FETCH =====================
-async function fetchAllData() {
-  setStatus('loading', '⚙ Fetching NSE...');
-  document.getElementById('refresh-spinner').innerHTML = '<span class="spinner">⚙</span>';
-  document.getElementById('refresh-status').textContent = 'Fetching from NSE...';
-  document.getElementById('refresh-status').style.color = 'var(--amber)';
-  STATE.nextFetchIn = SETTINGS.refreshMin * 60;
+// ─── CLOCK ───
+function tickClock() {
+  const n = new Date();
+  setText('hdr-clock', pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds()));
+  const h = n.getHours(), m = n.getMinutes();
+  const totalMin = (h-9)*60 + m;
+  const pct = Math.min(100, Math.max(0, totalMin/120*100));
+  const wf = document.getElementById('win-fill');
+  if (wf) { wf.style.width = pct+'%'; }
+  setText('win-pct', Math.round(pct)+'%');
+  const wl = document.getElementById('win-label');
+  if (h < 9) { setText('win-label','Not open'); setColor('win-label','var(--text3)'); if(wf) wf.style.background='var(--text3)'; }
+  else if (h===9&&m<15) { setText('win-label','Wait — 9:15'); setColor('win-label','var(--amber)'); if(wf) wf.style.background='var(--amber)'; }
+  else if (totalMin < 90) { setText('win-label','Window OPEN ✓'); setColor('win-label','var(--green)'); if(wf) wf.style.background='var(--green)'; }
+  else if (totalMin < 105) { setText('win-label','Caution zone'); setColor('win-label','var(--amber)'); if(wf) wf.style.background='var(--amber)'; }
+  else if (totalMin < 120) { setText('win-label','Exit only'); setColor('win-label','var(--red)'); if(wf) wf.style.background='var(--red)'; }
+  else { setText('win-label','CLOSED'); setColor('win-label','var(--red)'); if(wf) wf.style.background='var(--red)'; }
 
+  // Auto hard-exit at configured time
+  const exitT = document.getElementById('s-exit-time').value || '11:00';
+  const [eh, em] = exitT.split(':').map(Number);
+  if (h === eh && m >= em && m < em+2) { if (S.nf.active || S.bn.active) { exitAll(); addLog('var(--red)','⏰ AUTO HARD EXIT — 11:00 AM reached. All positions squared off.'); } }
+}
+
+function updateDateSub() {
+  const n = new Date();
+  setText('dash-date-sub', n.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}) + ' · 9–11 AM Intraday Option Buying · Dhan Live Data');
+}
+
+// ─── DHAN API CALLS ───
+async function dhanFetch(endpoint, method='GET', body=null) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'access-token': S.creds.token,
+    'client-id': S.creds.clientId
+  };
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(DHAN_BASE + endpoint, opts);
+  if (!res.ok) { const t = await res.text(); throw new Error(`Dhan ${res.status}: ${t.slice(0,120)}`); }
+  return res.json();
+}
+
+async function fetchAll() {
+  if (!S.creds.token) { setText('rbar-status','⚠ No API key — go to Settings'); return; }
+  document.getElementById('rbar-spinner').innerHTML = '<span class="spin">⚙</span>';
+  setText('rbar-status','Fetching from Dhan…'); setColor('rbar-status','var(--amber)');
+  setConnBadge('loading','Fetching…');
   try {
-    await Promise.all([
-      fetchOptionChain('NIFTY'),
-      fetchOptionChain('BANKNIFTY'),
-      fetchFIIData()
-    ]);
-    STATE.lastFetch = new Date();
-    STATE.fetchCount++;
-    setStatus('live', `✓ Live NSE — ${STATE.lastFetch.toLocaleTimeString('en-IN')}`);
-    document.getElementById('refresh-spinner').innerHTML = '';
-    document.getElementById('refresh-status').textContent = `Last fetch: ${STATE.lastFetch.toLocaleTimeString('en-IN')}`;
-    document.getElementById('refresh-status').style.color = 'var(--green)';
-    updateAllDisplays();
-    addLog('var(--green)', `NSE data fetched — NF: ${fmt(STATE.nf.spot)} BN: ${fmt(STATE.bn.spot)} · PCR NF:${STATE.nf.pcr.toFixed(2)} BN:${STATE.bn.pcr.toFixed(2)}`);
-    checkSignals();
+    await Promise.all([fetchLiveQuotes(), fetchOptionChain('nf'), fetchOptionChain('bn'), fetchFIIData()]);
+    S.lastFetch = new Date(); S.fetchCount++; S.connected = true;
+    setConnBadge('ok',`Live ✓ ${S.lastFetch.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`);
+    setText('rbar-status', `✓ Dhan data fetched at ${S.lastFetch.toLocaleTimeString('en-IN')}`);
+    setColor('rbar-status','var(--green)');
+    document.getElementById('rbar-spinner').innerHTML = '';
+    addLog('var(--green)',`Dhan data refreshed — NF:${fmt(S.nf.spot)} BN:${fmt(S.bn.spot)} PCR NF:${S.nf.pcr.toFixed(2)} BN:${S.bn.pcr.toFixed(2)}`);
+    refreshAllUI(); checkSignals();
   } catch(e) {
-    setStatus('error', '✗ NSE error — using cache');
-    document.getElementById('refresh-spinner').innerHTML = '';
-    document.getElementById('refresh-status').textContent = 'NSE fetch failed — will retry in 3 min';
-    document.getElementById('refresh-status').style.color = 'var(--red)';
-    addLog('var(--red)', 'NSE fetch error: ' + e.message + ' — will retry automatically');
+    S.connected = false;
+    setConnBadge('err','Dhan error');
+    setText('rbar-status','✗ Dhan API error — '+e.message);
+    setColor('rbar-status','var(--red)');
+    document.getElementById('rbar-spinner').innerHTML = '';
+    addLog('var(--red)','Dhan fetch error: '+e.message);
   }
 }
 
-async function fetchOptionChain(symbol) {
-  const res = await fetch(`/api/nse?type=optionchain&symbol=${symbol}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+async function fetchLiveQuotes() {
+  // Dhan LTP API — fetch index spot prices
+  const data = await dhanFetch('/v2/marketfeed/ltp', 'POST', {
+    NSE_EQ: [NIFTY_SEC_ID, BANKNIFTY_SEC_ID]
+  });
+  // Parse Dhan LTP response
+  const eqData = data?.data?.NSE_EQ || data?.NSE_EQ || {};
+  const nfData  = eqData[NIFTY_SEC_ID] || eqData['13'] || {};
+  const bnData  = eqData[BANKNIFTY_SEC_ID] || eqData['25'] || {};
+  if (nfData.last_price || nfData.LTP) {
+    S.nf.prev = S.nf.spot || nfData.last_price || nfData.LTP;
+    S.nf.spot = nfData.last_price || nfData.LTP;
+  }
+  if (bnData.last_price || bnData.LTP) {
+    S.bn.prev = S.bn.spot || bnData.last_price || bnData.LTP;
+    S.bn.spot = bnData.last_price || bnData.LTP;
+  }
+}
 
-  const records = data?.records?.data || [];
-  const underlying = data?.records?.underlyingValue || 0;
-  const expiry = data?.records?.expiryDates?.[0] || '';
+async function fetchOptionChain(key) {
+  const sym = key === 'nf' ? 'NIFTY' : 'BANKNIFTY';
+  // Dhan option chain endpoint
+  const data = await dhanFetch(`/v2/optionchain?UnderlyingScrip=${key === 'nf' ? 13 : 25}&UnderlyingSeg=${EX_NSE_FO}&Expiry=`, 'GET');
+  const rows = data?.data || data?.OptionChainData || [];
+  if (!rows.length) throw new Error(`No option chain data for ${sym}`);
 
-  if (!underlying || records.length === 0) throw new Error('No data from NSE');
+  const spot = S[key].spot || 0;
+  const step = key === 'nf' ? 50 : 100;
+  const atmStrike = Math.round(spot / step) * step;
 
-  const key = symbol === 'NIFTY' ? 'nf' : 'bn';
-  STATE[key].prevSpot = STATE[key].spot || underlying;
-  STATE[key].spot = underlying;
-
-  // Calculate PCR, max pain, OI walls
-  let totalCallOI = 0, totalPutOI = 0;
-  let maxCallOI = 0, maxPutOI = 0;
-  let topCallStrike = 0, topPutStrike = 0;
-  const atmStrike = Math.round(underlying / (symbol === 'NIFTY' ? 50 : 100)) * (symbol === 'NIFTY' ? 50 : 100);
-  let atmIV = 0, atmCallLTP = 0;
+  let totalCeOI = 0, totalPeOI = 0, maxCeOI = 0, maxPeOI = 0;
+  let topCeStrike = 0, topPeStrike = 0, atmIV = 0;
+  let atmCeLTP = 0, atm1CeLTP = 0;
   const painMap = {};
 
-  records.forEach(rec => {
-    const strike = rec.strikePrice;
-    const ce = rec.CE || {};
-    const pe = rec.PE || {};
-    const ceOI = ce.openInterest || 0;
-    const peOI = pe.openInterest || 0;
-    totalCallOI += ceOI;
-    totalPutOI += peOI;
-    if (ceOI > maxCallOI) { maxCallOI = ceOI; topCallStrike = strike; }
-    if (peOI > maxPutOI) { maxPutOI = peOI; topPutStrike = strike; }
-
-    // Max pain calculation
-    if (!painMap[strike]) painMap[strike] = 0;
-    Object.keys(painMap).forEach(s => {
-      const si = parseInt(s);
-      painMap[s] += Math.max(0, strike - si) * ceOI;
-      painMap[s] += Math.max(0, si - strike) * peOI;
-    });
-
-    if (Math.abs(strike - atmStrike) <= (symbol === 'NIFTY' ? 50 : 100)) {
-      if (ce.impliedVolatility) atmIV = ce.impliedVolatility;
-      if (ce.lastPrice) atmCallLTP = ce.lastPrice;
+  // Build strike map
+  const strikeMap = {};
+  rows.forEach(r => {
+    const st = r.strikePrice || r.strike_price || r.StrikePrice;
+    if (!st) return;
+    if (!strikeMap[st]) strikeMap[st] = { ce:{}, pe:{} };
+    if (r.optionType === 'CE' || r.CE || r.callOption) {
+      const ce = r.CE || r.callOption || r;
+      strikeMap[st].ce = { oi: ce.openInterest || ce.OI || 0, ltp: ce.lastPrice || ce.LTP || 0, iv: ce.impliedVolatility || ce.IV || 0 };
+    }
+    if (r.optionType === 'PE' || r.PE || r.putOption) {
+      const pe = r.PE || r.putOption || r;
+      strikeMap[st].pe = { oi: pe.openInterest || pe.OI || 0, ltp: pe.lastPrice || pe.LTP || 0, iv: pe.impliedVolatility || pe.IV || 0 };
     }
   });
 
-  // Find ATM+1 call LTP for entry price
-  const step = symbol === 'NIFTY' ? 50 : 100;
-  const atm1Strike = atmStrike + step;
-  let atm1CallLTP = 0;
-  records.forEach(rec => {
-    if (rec.strikePrice === atm1Strike && rec.CE?.lastPrice) atm1CallLTP = rec.CE.lastPrice;
+  const strikes = Object.keys(strikeMap).map(Number).sort((a,b) => a-b);
+  strikes.forEach(st => {
+    const c = strikeMap[st].ce, p = strikeMap[st].pe;
+    const coi = c.oi || 0, poi = p.oi || 0;
+    totalCeOI += coi; totalPeOI += poi;
+    if (coi > maxCeOI) { maxCeOI = coi; topCeStrike = st; }
+    if (poi > maxPeOI) { maxPeOI = poi; topPeStrike = st; }
+    if (!painMap[st]) painMap[st] = 0;
+    strikes.forEach(s2 => {
+      if (!painMap[s2]) painMap[s2] = 0;
+      painMap[st] += Math.max(0, st - s2) * (strikeMap[s2]?.ce?.oi || 0);
+      painMap[st] += Math.max(0, s2 - st) * (strikeMap[s2]?.pe?.oi || 0);
+    });
+    if (Math.abs(st - atmStrike) <= step/2) { if (c.iv) atmIV = c.iv; if (c.ltp) atmCeLTP = c.ltp; }
+    if (st === atmStrike + step) atm1CeLTP = c.ltp || 0;
   });
 
-  STATE[key].pcr = totalPutOI > 0 ? totalCallOI > 0 ? totalPutOI / totalCallOI : 0 : 0;
-  STATE[key].callWall = topCallStrike;
-  STATE[key].putWall = topPutStrike;
-  STATE[key].iv = atmIV;
-  STATE[key].strike = atm1Strike;
-  STATE[key].entryPrice = Math.round(atm1CallLTP);
+  let minPain = Infinity, mpStrike = atmStrike;
+  Object.entries(painMap).forEach(([s, v]) => { if (v < minPain) { minPain = v; mpStrike = parseInt(s); } });
 
-  // Max pain
-  let minPain = Infinity, maxPainStrike = atmStrike;
-  Object.entries(painMap).forEach(([s, pain]) => { if (pain < minPain) { minPain = pain; maxPainStrike = parseInt(s); }});
-  STATE[key].maxPain = maxPainStrike;
+  S[key].pcr = totalCeOI > 0 ? (totalPeOI / totalCeOI) : 0;
+  S[key].maxPain = mpStrike;
+  S[key].putWall = topPeStrike;
+  S[key].callWall = topCeStrike;
+  S[key].iv = atmIV;
+  S[key].strike = atmStrike + step;
+  S[key].entryPrice = Math.round(atm1CeLTP) || Math.round(atmCeLTP * 0.7);
+  if (S[key].active) S[key].ltp = atm1CeLTP || S[key].ltp;
 
-  // Update LTP if trade is active
-  if (STATE[key].active && atm1CallLTP > 0) STATE[key].ltp = atm1CallLTP;
-
-  // Store OI data for table
-  STATE[key].oiRecords = records.slice().sort((a,b) => a.strikePrice - b.strikePrice);
-  STATE[key].expiry = expiry;
+  // Store for OI table (10 strikes around ATM)
+  S[key].oiRows = strikes
+    .filter(st => Math.abs(st - atmStrike) <= step * 6)
+    .map(st => ({ strike: st, ce: strikeMap[st].ce, pe: strikeMap[st].pe, isAtm: Math.abs(st-atmStrike) < step/2 }));
+  S[key].expiry = data?.expiry || data?.ExpiryDate || '';
 }
 
 async function fetchFIIData() {
   try {
-    const res = await fetch('/api/nse?type=fii');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      const today = data[0] || {};
-      STATE.fii.buyVal = today.buyValue || 0;
-      STATE.fii.sellVal = today.sellValue || 0;
-      STATE.fii.net = (today.buyValue || 0) - (today.sellValue || 0);
+    // Dhan market data — FII/DII participant data
+    const data = await dhanFetch('/v2/marketfeed/market-status');
+    // Try to extract FII info if available in response
+    if (data?.fii) {
+      S.fii.net = data.fii.net || 0;
+      S.fii.buyVal = data.fii.buy || 0;
+      S.fii.sellVal = data.fii.sell || 0;
     }
-  } catch(e) {}
+    // Fallback: Dhan participant data endpoint
+  } catch(e) {
+    // FII data not critical — continue without it
+  }
 }
 
-// ===================== PROBABILITY =====================
-function calcProbability(key) {
-  const s = STATE[key];
-  if (!s.spot) return 0;
-  let score = 0;
-  const reasons = [];
+// ─── PROBABILITY ───
+function calcProb(key) {
+  const s = S[key]; let score = 0; const reasons = [];
+  // PCR (25)
+  const pcrS = s.pcr >= 1.2 ? 25 : s.pcr >= 1.0 ? 18 : s.pcr >= 0.8 ? 11 : 5;
+  score += pcrS; reasons.push({l:'PCR Direction',s:pcrS,m:25,d:`PCR ${s.pcr.toFixed(2)}`});
+  // Max pain (20)
+  const mpD = s.spot - s.maxPain;
+  const mpS = mpD > 200 ? 20 : mpD > 50 ? 14 : mpD > 0 ? 9 : 3;
+  score += mpS; reasons.push({l:'Max Pain Position',s:mpS,m:20,d:`Spot ${mpD>=0?'+':''}${Math.round(mpD)} from pain`});
+  // IV (20)
+  const ivS = (s.iv > 8 && s.iv < 40) ? 20 : s.iv > 0 ? 11 : 10;
+  score += ivS; reasons.push({l:'IV Environment',s:ivS,m:20,d:`IV ${s.iv.toFixed(1)}%`});
+  // Trend (15)
+  const chg = s.prev > 0 ? ((s.spot-s.prev)/s.prev)*100 : 0;
+  const trS = chg > 0.3 ? 15 : chg > 0 ? 10 : chg > -0.2 ? 5 : 2;
+  score += trS; reasons.push({l:'Spot Trend',s:trS,m:15,d:`${chg>=0?'+':''}${chg.toFixed(2)}%`});
+  // FII (10)
+  const fiiS = S.fii.net > 0 ? 10 : S.fii.net < 0 ? 0 : 5;
+  score += fiiS; reasons.push({l:'FII Bias',s:fiiS,m:10,d:S.fii.net > 0 ? 'Long' : S.fii.net < 0 ? 'Short' : 'Neutral'});
+  // OI momentum (10) — CE OI at call wall falling = bullish
+  const oiS = s.callWall > s.spot ? 10 : 5;
+  score += oiS; reasons.push({l:'OI Momentum',s:oiS,m:10,d:s.callWall > s.spot ? 'CE wall above spot' : 'CE wall near'});
 
-  // OI direction (25 pts)
-  const pcrScore = s.pcr >= 1.2 ? 25 : s.pcr >= 1.0 ? 18 : s.pcr >= 0.8 ? 10 : 5;
-  score += pcrScore;
-  reasons.push({ label: 'OI Direction (PCR)', score: pcrScore, max: 25, detail: `PCR ${s.pcr.toFixed(2)}` });
-
-  // PCR value (20 pts)
-  const pcrVal = s.pcr >= 1.1 ? 20 : s.pcr >= 0.9 ? 14 : 8;
-  score += pcrVal;
-  reasons.push({ label: 'PCR Strength', score: pcrVal, max: 20, detail: s.pcr >= 1.1 ? 'Bullish' : s.pcr >= 0.9 ? 'Neutral' : 'Bearish' });
-
-  // Max pain (20 pts)
-  const mpDiff = s.spot - s.maxPain;
-  const mpScore = mpDiff > 200 ? 20 : mpDiff > 0 ? 15 : mpDiff > -100 ? 8 : 3;
-  score += mpScore;
-  reasons.push({ label: 'Max Pain Position', score: mpScore, max: 20, detail: `Spot ${mpDiff > 0 ? '+' : ''}${Math.round(mpDiff)} from pain` });
-
-  // IV environment (20 pts)
-  const ivScore = s.iv > 10 && s.iv < 35 ? 20 : s.iv > 0 ? 12 : 10;
-  score += ivScore;
-  reasons.push({ label: 'IV Environment', score: ivScore, max: 20, detail: `IV ${s.iv.toFixed(1)}%` });
-
-  // Market trend (15 pts)
-  const chg = s.prevSpot > 0 ? ((s.spot - s.prevSpot) / s.prevSpot) * 100 : 0;
-  const trendScore = chg > 0.2 ? 15 : chg > 0 ? 10 : chg > -0.2 ? 6 : 3;
-  score += trendScore;
-  reasons.push({ label: 'Spot Trend', score: trendScore, max: 15, detail: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}% change` });
-
-  // FII bonus
-  if (STATE.fii.net > 0) score = Math.min(100, score + 5);
-
-  STATE[key].prob = Math.min(100, score);
-  STATE[key].probReasons = reasons;
-  return score;
+  s.prob = Math.min(100, score);
+  s.probReasons = reasons;
+  return s.prob;
 }
 
+// ─── SIGNAL CHECK ───
 function checkSignals() {
-  ['nf','bn'].forEach(key => {
-    const s = STATE[key];
-    const prob = calcProbability(key);
-    const now = new Date();
-    const h = now.getHours(), m = now.getMinutes();
-    const inWindow = (h === 9 && m >= 15) || (h === 10 && m < 45);
-    const entry = s.entryPrice;
+  const now = new Date(); const h = now.getHours(), m = now.getMinutes();
+  const noEntryT = document.getElementById('s-no-entry').value || '10:45';
+  const [neh, nem] = noEntryT.split(':').map(Number);
+  const pastNoEntry = h > neh || (h === neh && m >= nem);
+  const minProb = parseInt(document.getElementById('s-min-prob').value) || 70;
 
-    if (prob >= SETTINGS.minProb && inWindow && entry > 0 && !s.active) {
-      // Fire signal — start paper trade
-      s.active = true;
-      s.ltp = entry;
-      s.sl = Math.round(entry * (1 - SETTINGS.slPct / 100));
-      s.slPrice = s.sl;
-      s.t1Price = Math.round(entry * (1 + SETTINGS.t1Pct / 100));
-      s.t2Price = Math.round(entry * (1 + SETTINGS.t2Pct / 100));
-      const name = key === 'nf' ? 'NIFTY' : 'BANKNIFTY';
-      addLog('var(--green)', `SIGNAL FIRED — ${name} ${s.strike} CE · Entry ₹${entry} · Prob ${prob}% · SL ₹${s.sl} · T1 ₹${s.t1Price} · T2 ₹${s.t2Price}`);
+  ['nf','bn'].forEach(key => {
+    const s = S[key]; const prob = calcProb(key);
+    const inWindow = (h===9&&m>=15)||(h===10&&m<45);
+    if (prob >= minProb && inWindow && !pastNoEntry && s.entryPrice > 0 && !s.active) {
+      s.active = true; s.ltp = s.entryPrice;
+      const slPct = parseInt(document.getElementById('s-sl-pct').value)||30;
+      const t1Pct = parseInt(document.getElementById('s-t1-pct').value)||40;
+      const t2Pct = parseInt(document.getElementById('s-t2-pct').value)||80;
+      s.sl = Math.round(s.entryPrice*(1-slPct/100));
+      s.t1 = Math.round(s.entryPrice*(1+t1Pct/100));
+      s.t2 = Math.round(s.entryPrice*(1+t2Pct/100));
+      const name = key==='nf'?'NIFTY':'BANKNIFTY';
+      addLog('var(--green)',`⚡ SIGNAL FIRED — ${name} ${s.strike} CE · Entry ₹${s.entryPrice} · Prob ${prob}% · SL ₹${s.sl} · T1 ₹${s.t1} · T2 ₹${s.t2}`);
+      const cnt = document.getElementById('sig-count-badge');
+      if (cnt) cnt.textContent = (parseInt(cnt.textContent)||0)+1;
       renderTradeCards();
     } else if (s.active) {
-      // Check SL / target
-      if (s.ltp <= s.sl) {
-        autoExit(key, 'SL HIT');
-      } else if (s.ltp >= s.t2Price) {
-        autoExit(key, 'TARGET 2 HIT');
-      }
+      if (s.ltp <= s.sl) doExit(key,'SL HIT');
+      else if (s.ltp >= s.t2) doExit(key,'TARGET 2 HIT 🎯');
+      else if (s.ltp >= s.t1 && S.toggles.trail) { s.sl = s.entryPrice; }
     }
   });
   updateProbBreakdown();
 }
 
-// ===================== DISPLAY UPDATES =====================
-function updateAllDisplays() {
-  const s = STATE;
-  const nf = s.nf, bn = s.bn;
+// ─── TRADE ACTIONS ───
+function manualExit(key) { if (S[key].active) doExit(key,'Manual Exit'); }
+function trailSL(key) {
+  if (!S[key].active) return;
+  S[key].sl = S[key].entryPrice;
+  addLog('var(--amber)',`SL trailed to entry — ${key==='nf'?'Nifty':'BNifty'} CE SL → ₹${S[key].entryPrice} (risk-free now)`);
+}
+function exitAll() { manualExit('nf'); manualExit('bn'); }
 
-  // Top bar
-  setEl('nf-top', fmt(nf.spot));
-  setChg('nf-top-chg', nf.spot, nf.prevSpot);
-  setEl('bn-top', fmt(bn.spot));
-  setChg('bn-top-chg', bn.spot, bn.prevSpot);
-
-  // Dashboard metrics
-  setEl('dash-nf-spot', fmt(nf.spot));
-  setChgEl('dash-nf-chg', nf.spot, nf.prevSpot);
-  setEl('dash-bn-spot', fmt(bn.spot));
-  setChgEl('dash-bn-chg', bn.spot, bn.prevSpot);
-
-  const nfPCR = nf.pcr.toFixed(2);
-  const bnPCR = bn.pcr.toFixed(2);
-  setEl('dash-nf-pcr', nfPCR);
-  setEl('dash-nf-pcr-bias', nf.pcr >= 1.1 ? '▲ Bullish' : nf.pcr >= 0.9 ? 'Neutral' : '▼ Bearish');
-  colorEl('dash-nf-pcr', nf.pcr >= 1.1 ? 'var(--green)' : nf.pcr >= 0.9 ? 'var(--amber)' : 'var(--red)');
-  colorEl('dash-nf-pcr-bias', nf.pcr >= 1.1 ? 'var(--green)' : nf.pcr >= 0.9 ? 'var(--amber)' : 'var(--red)');
-
-  setEl('dash-bn-pcr', bnPCR);
-  setEl('dash-bn-pcr-bias', bn.pcr >= 1.1 ? '▲ Bullish' : bn.pcr >= 0.9 ? 'Neutral' : '▼ Bearish');
-  colorEl('dash-bn-pcr', bn.pcr >= 1.1 ? 'var(--green)' : bn.pcr >= 0.9 ? 'var(--amber)' : 'var(--red)');
-
-  // Signal page
-  const nfProb = calcProbability('nf');
-  const bnProb = calcProbability('bn');
-  setEl('nf-prob-badge', nfProb + '%');
-  setEl('bn-prob-badge', bnProb + '%');
-  colorEl('nf-prob-badge', nfProb >= 70 ? 'var(--green)' : nfProb >= 60 ? 'var(--amber)' : 'var(--red)');
-  colorEl('bn-prob-badge', bnProb >= 70 ? 'var(--green)' : bnProb >= 60 ? 'var(--amber)' : 'var(--red)');
-
-  updateSignalCard('nf');
-  updateSignalCard('bn');
-  updateOICards('nf');
-  updateOICards('bn');
-  updateFIIDisplay();
-  updateTradePnL();
-  updateNSEDataSummary();
+function doExit(key, reason) {
+  const s = S[key]; const mult = key==='nf'?50:15;
+  const pnl = Math.round((s.ltp - s.entryPrice)*mult);
+  s.active = false;
+  S.history.push({name:`${key==='nf'?'NIFTY':'BANKNIFTY'} ${s.strike} CE`, entry:s.entryPrice, exit:Math.round(s.ltp), pnl, reason, time:new Date().toLocaleTimeString('en-IN')});
+  S.histPnl += pnl;
+  addLog(reason.includes('SL')?'var(--red)':'var(--green)',`${reason} — ${key==='nf'?'NIFTY':'BANKNIFTY'} ${s.strike} CE @ ₹${Math.round(s.ltp)} · ${pnl>=0?'+':''}₹${pnl}`);
+  renderTradeCards(); renderHistory();
 }
 
-function updateSignalCard(key) {
-  const s = STATE[key];
-  const p = calcProbability(key);
-  const e = s.entryPrice;
-  if (!e) return;
-  const sl = Math.round(e * 0.7), t1 = Math.round(e * 1.4), t2 = Math.round(e * 1.8);
-  const pref = key === 'nf' ? 'sig-nf' : 'sig-bn';
-  const name = key === 'nf' ? 'NIFTY' : 'BANKNIFTY';
+// ─── DHAN ORDER PLACEMENT ───
+async function placeDhanOrder(key, side) {
+  if (S.mode !== 'live') { addLog('var(--amber)',`Order blocked — app is in Paper Trade mode. Switch to Live in Settings.`); return; }
+  if (!S.creds.token) { addLog('var(--red)','No Dhan token. Add in Settings.'); return; }
+  const secId = document.getElementById(`ord-${key}-secid`).value.trim();
+  const qty   = parseInt(document.getElementById(`ord-${key}-qty`).value) || (key==='nf'?50:15);
+  const oType = document.getElementById(`ord-${key}-type`).value;
+  const price = oType==='LIMIT' ? parseFloat(document.getElementById(`ord-${key}-price`).value)||0 : 0;
+  if (!secId) { addLog('var(--red)','Enter Security ID first (from Dhan option chain).'); return; }
 
-  setEl(`${pref}-entry`, '₹'+e);
-  setEl(`${pref}-sl`, '₹'+sl);
-  setEl(`${pref}-t1`, '₹'+t1);
-  setEl(`${pref}-t2`, '₹'+t2);
-  setEl(`${pref}-ltp`, s.active ? '₹'+fmt2(s.ltp) : '₹'+e);
-  setEl(`${pref}-spot`, fmt(s.spot));
-  setEl(`${pref}-pcr`, s.pcr.toFixed(2));
-  setEl(`${pref}-pcr-label`, s.pcr >= 1.1 ? '▲ Bullish' : 'Neutral');
-  setEl(`${pref}-maxpain`, fmt(s.maxPain));
-  setEl(`${pref}-maxpain-dist`, `${Math.round(s.spot - s.maxPain) >= 0 ? '+' : ''}${Math.round(s.spot - s.maxPain)} pts`);
-  setEl(`${pref}-iv`, s.iv.toFixed(1) + '%');
-  setEl(`${pref}-iv-label`, s.iv > 20 ? 'High IV' : s.iv > 10 ? 'Moderate' : 'Low IV');
+  const payload = {
+    dhanClientId: S.creds.clientId,
+    transactionType: side,
+    exchangeSegment: EX_NSE_FO,
+    productType: 'INTRADAY',
+    orderType: oType,
+    validity: 'DAY',
+    tradingSymbol: '',
+    securityId: secId,
+    quantity: qty,
+    price: price,
+    disclosedQuantity: 0,
+    afterMarketOrder: false,
+    amoTime: 'OPEN',
+    boProfitValue: 0,
+    boStopLossValue: 0
+  };
 
-  // Also update dashboard levels
-  const dpref = key === 'nf' ? 'd-nf' : 'd-bn';
-  setEl(`${dpref}-entry`, '₹'+e);
-  setEl(`${dpref}-sl`, '₹'+sl);
-  setEl(`${dpref}-t1`, '₹'+t1);
-  setEl(`${dpref}-t2`, '₹'+t2);
-  setEl(`${dpref}-ltp`, s.active ? '₹'+fmt2(s.ltp) : '₹'+e);
+  try {
+    addLog('var(--blue)',`Placing ${side} order via Dhan — SecID ${secId} qty ${qty}…`);
+    const res = await dhanFetch('/v2/orders', 'POST', payload);
+    const orderId = res?.orderId || res?.data?.orderId || 'unknown';
+    addLog('var(--green)',`✅ ORDER PLACED — ${side} ${qty} @ Dhan · OrderID: ${orderId}`);
+    S.orders.push({side, secId, qty, orderId, time:new Date().toLocaleTimeString('en-IN'), status:'PLACED'});
+    renderOrderBook();
+  } catch(e) {
+    addLog('var(--red)',`❌ Order failed: ${e.message}`);
+  }
+}
 
+async function fetchPositions() {
+  if (!S.creds.token) { addLog('var(--red)','Add Dhan credentials in Settings first.'); return; }
+  try {
+    const data = await dhanFetch('/v2/positions');
+    const pos = data?.data || data || [];
+    const el = document.getElementById('positions-list');
+    if (!pos.length) { if(el) el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text2)">No open positions.</div>'; return; }
+    if (el) el.innerHTML = '<table class="tbl"><thead><tr><th>Symbol</th><th>Qty</th><th>Avg</th><th>LTP</th><th>P&L</th><th>Product</th></tr></thead><tbody>' +
+      pos.map(p => `<tr><td style="color:var(--text)">${p.tradingSymbol||p.securityId}</td><td class="sc">${p.netQty||p.quantity||0}</td><td class="sc">${(p.buyAvg||p.avgPrice||0).toFixed(2)}</td><td class="sc">${(p.ltp||p.lastTradedPrice||0).toFixed(2)}</td><td class="${(p.unrealizedProfit||p.pnl||0)>=0?'pc':'cc'}">${(p.unrealizedProfit||p.pnl||0).toFixed(0)}</td><td style="color:var(--text2)">${p.productType||''}</td></tr>`).join('') +
+      '</tbody></table>';
+  } catch(e) { addLog('var(--red)','Positions fetch failed: '+e.message); }
+}
+
+// ─── UI REFRESH ───
+function refreshAllUI() {
+  const nf = S.nf, bn = S.bn;
+  // Header
+  setText('h-nf-val', fmt(nf.spot)); setChg('h-nf-chg', nf.spot, nf.prev);
+  setText('h-bn-val', fmt(bn.spot)); setChg('h-bn-chg', bn.spot, bn.prev);
+  // Dashboard metrics
+  setText('d-nf-spot', fmt(nf.spot)); setChgEl('d-nf-chg', nf.spot, nf.prev); setColor('d-nf-spot','var(--blue)');
+  setText('d-bn-spot', fmt(bn.spot)); setChgEl('d-bn-chg', bn.spot, bn.prev); setColor('d-bn-spot','var(--green)');
+  updatePCRMetric('d-nf-pcr','d-nf-pcr-lbl', nf.pcr);
+  updatePCRMetric('d-bn-pcr','d-bn-pcr-lbl', bn.pcr);
+  // Prob badges
+  const np = calcProb('nf'), bp = calcProb('bn');
+  setText('d-nf-prob-lbl', np+'% prob'); setColor('d-nf-prob-lbl', probColor(np));
+  setText('d-bn-prob-lbl', bp+'% prob'); setColor('d-bn-prob-lbl', probColor(bp));
+  // Signal cards levels
+  updateSignalLevels('nf'); updateSignalLevels('bn');
+  // OI pages
+  updateOIPage('nf'); updateOIPage('bn');
+  // FII
+  updateFIIUI();
+  // P&L
+  updatePnL();
+}
+
+function updateSignalLevels(key) {
+  const s = S[key]; const p = key==='nf'?'sig-nf':'sig-bn';
+  const e = s.entryPrice; if (!e) return;
+  const slPct = parseInt(document.getElementById('s-sl-pct').value)||30;
+  const t1Pct = parseInt(document.getElementById('s-t1-pct').value)||40;
+  const t2Pct = parseInt(document.getElementById('s-t2-pct').value)||80;
+  setText(`${p}-entry`, '₹'+e);
+  setText(`${p}-sl`, '₹'+Math.round(e*(1-slPct/100)));
+  setText(`${p}-t1`, '₹'+Math.round(e*(1+t1Pct/100)));
+  setText(`${p}-t2`, '₹'+Math.round(e*(1+t2Pct/100)));
+  setText(`${p}-ltp`, s.active ? '₹'+s.ltp.toFixed(1) : '₹'+e);
+  const pctC = s.ltp && s.entryPrice ? ((s.ltp-s.entryPrice)/s.entryPrice*100).toFixed(1) : '0.0';
+  setText(`${p}-ltp-p`, (parseFloat(pctC)>=0?'+':'')+pctC+'%');
+  setColor(`${p}-ltp-p`, parseFloat(pctC)>=0?'var(--green)':'var(--red)');
+  // Dashboard levels too
+  const dp = key==='nf'?'d-nf':'d-bn';
+  setText(`${dp}-entry`,'₹'+e); setText(`${dp}-sl`,'₹'+Math.round(e*(1-slPct/100)));
+  setText(`${dp}-t1`,'₹'+Math.round(e*(1+t1Pct/100))); setText(`${dp}-t2`,'₹'+Math.round(e*(1+t2Pct/100)));
+  setText(`${dp}-ltp`, s.active?'₹'+s.ltp.toFixed(1):'₹'+e);
+  const prob = calcProb(key);
+  setText(`${p}-prob-badge`, prob+'%'); setColor(`${p}-prob-badge`, probColor(prob));
+  setText(`sig-${key}-strike`, s.strike ? fmt(s.strike) : '—');
   // Signal tags
   const tags = [];
-  if (s.pcr >= 1.1) tags.push('<span class="tag tag-g">PCR bullish '+s.pcr.toFixed(2)+'</span>');
-  if (s.spot > s.maxPain) tags.push('<span class="tag tag-g">Above max pain '+fmt(s.maxPain)+'</span>');
-  if (s.iv > 10 && s.iv < 35) tags.push('<span class="tag tag-b">IV '+s.iv.toFixed(1)+'% favours buying</span>');
-  if (STATE.fii.net > 0) tags.push('<span class="tag tag-g">FII net long</span>');
-  if (s.callWall > s.spot) tags.push('<span class="tag tag-r">Call wall '+fmt(s.callWall)+'</span>');
-  if (s.putWall < s.spot) tags.push('<span class="tag tag-g">Put wall '+fmt(s.putWall)+'</span>');
-
-  const tagsEl = document.getElementById(`${key}-signal-tags`);
-  if (tagsEl) tagsEl.innerHTML = tags.length ? tags.join('') : '<span class="tag tag-b">Analysing...</span>';
-
-  const reasonEl = document.getElementById(`${key}-signal-reason`);
-  if (reasonEl) reasonEl.textContent = `Spot ${fmt(s.spot)} · Strike ${s.strike} CE · Expiry ${s.expiry || 'current'} · Probability: ${p}% ${p >= 70 ? '✓ TRADE ALLOWED' : '✗ Below threshold'}`;
-
-  const strikeEl = document.getElementById(`${key}-signal-strike`);
-  if (strikeEl) strikeEl.textContent = s.strike ? `${fmt(s.strike)} CE` : 'ATM+1';
-
-  document.getElementById(`${key}-signal-card`).className = 'card ' + (p >= 70 ? 'signal-fire' : 'signal-wait');
+  if (s.pcr >= 1.1) tags.push('<span class="tag tg">PCR Bullish '+s.pcr.toFixed(2)+'</span>');
+  if (s.spot > s.maxPain) tags.push('<span class="tag tg">Above MaxPain '+fmt(s.maxPain)+'</span>');
+  if (s.iv > 8 && s.iv < 40) tags.push('<span class="tag tb">IV '+s.iv.toFixed(1)+'%</span>');
+  if (S.fii.net > 0) tags.push('<span class="tag tg">FII Net Long</span>');
+  if (s.callWall > s.spot) tags.push('<span class="tag ta">Call Wall '+fmt(s.callWall)+'</span>');
+  const tel = document.getElementById(`sig-${key}-tags`);
+  if (tel) tel.innerHTML = tags.length ? tags.join('') : '<span class="tag tb">Analysing…</span>';
+  const rl = document.getElementById(`sig-${key}-reason`);
+  if (rl) rl.textContent = `Spot ${fmt(s.spot)} · Strike ${s.strike} CE · Expiry ${s.expiry||'current'} · Prob ${prob}% ${prob>=70?'✓ TRADE ALLOWED':'✗ Below 70% threshold'}`;
+  // Spot metrics on signal page
+  const sp = key==='nf'?'s-nf':'s-bn';
+  setText(`${sp}-spot`, fmt(s.spot)); setChgEl(`${sp}-spot-c`, s.spot, s.prev);
+  updatePCRMetric(`${sp}-pcr`, `${sp}-pcr-l`, s.pcr);
+  setText(`${sp}-mp`, fmt(s.maxPain));
+  setText(`${sp}-mp-d`, `${Math.round(s.spot-s.maxPain)>=0?'+':''}${Math.round(s.spot-s.maxPain)} pts`);
+  setText(`${sp}-iv`, s.iv.toFixed(1)+'%');
+  setText(`${sp}-iv-l`, s.iv>25?'High IV':s.iv>12?'Moderate':'Low IV');
+  setColor(`${sp}-iv-l`, s.iv>12&&s.iv<40?'var(--green)':'var(--amber)');
+  document.getElementById(`sig-${key}-card`).className = 'card '+(prob>=70?'green-glow':'amber-glow');
 }
 
-function updateOICards(key) {
-  const s = STATE[key];
-  const pref = key === 'nf' ? 'oi-nf' : 'oi-bn';
-  setEl(`${pref}-pcr`, s.pcr.toFixed(2));
-  setEl(`${pref}-pcr-lbl`, s.pcr >= 1.1 ? '▲ Bullish' : s.pcr >= 0.9 ? 'Neutral' : '▼ Bearish');
-  colorEl(`${pref}-pcr`, s.pcr >= 1.1 ? 'var(--green)' : s.pcr >= 0.9 ? 'var(--amber)' : 'var(--red)');
-  setEl(`${pref}-mp`, fmt(s.maxPain));
-  setEl(`${pref}-mp-lbl`, `${Math.round(s.spot - s.maxPain) >= 0 ? '+' : ''}${Math.round(s.spot - s.maxPain)} from spot`);
-  setEl(`${pref}-pw`, fmt(s.putWall));
-  setEl(`${pref}-cw`, fmt(s.callWall));
-
-  if (!s.oiRecords || s.oiRecords.length === 0) return;
-  const atmStrike = Math.round(s.spot / (key === 'nf' ? 50 : 100)) * (key === 'nf' ? 50 : 100);
-  const nearRecords = s.oiRecords.filter(r => Math.abs(r.strikePrice - atmStrike) <= (key === 'nf' ? 500 : 2000)).slice(0, 12);
-
-  let html = '<table class="oi-table"><thead><tr><th style="color:var(--blue)">Call OI</th><th style="color:var(--blue)">CE LTP</th><th class="strike-col">Strike</th><th style="color:var(--green)">PE LTP</th><th style="color:var(--green)">Put OI</th><th>Signal</th></tr></thead><tbody>';
-  nearRecords.forEach(r => {
-    const strike = r.strikePrice;
-    const ce = r.CE || {}, pe = r.PE || {};
-    const isATM = Math.abs(strike - atmStrike) < (key === 'nf' ? 26 : 51);
-    const ceOI = ((ce.openInterest || 0) / 100000).toFixed(1) + 'L';
-    const peOI = ((pe.openInterest || 0) / 100000).toFixed(1) + 'L';
-    const ceLTP = (ce.lastPrice || 0).toFixed(0);
-    const peLTP = (pe.lastPrice || 0).toFixed(0);
-    const sig = strike === s.callWall ? '<span class="tag tag-r">Resist</span>' : strike === s.putWall ? '<span class="tag tag-g">Support</span>' : strike === s.maxPain ? '<span class="tag tag-a">Pain</span>' : '';
-    html += `<tr${isATM ? ' class="atm-row"' : ''}><td class="call-col">${ceOI}</td><td class="call-col">${ceLTP}</td><td class="strike-col">${fmt(strike)}${isATM ? ' ◀ATM' : ''}</td><td class="put-col">${peLTP}</td><td class="put-col">${peOI}</td><td>${sig}</td></tr>`;
+function updateOIPage(key) {
+  const s = S[key]; const p = key==='nf'?'oi-nf':'oi-bn';
+  updatePCRMetric(`${p}-pcr`,`${p}-pcr-l`,s.pcr);
+  setText(`${p}-mp`, fmt(s.maxPain));
+  setText(`${p}-mp-l`, `${Math.round(s.spot-s.maxPain)>=0?'+':''}${Math.round(s.spot-s.maxPain)} from spot`);
+  setText(`${p}-pw`, fmt(s.putWall)); setText(`${p}-cw`, fmt(s.callWall));
+  if (!s.oiRows.length) return;
+  let html = '<table class="tbl"><thead><tr><th style="color:var(--blue)">Call OI</th><th style="color:var(--blue)">CE LTP</th><th class="sc">Strike</th><th style="color:var(--green)">PE LTP</th><th style="color:var(--green)">Put OI</th><th>Signal</th></tr></thead><tbody>';
+  s.oiRows.forEach(r => {
+    const cOI = ((r.ce?.oi||0)/100000).toFixed(1)+'L', pOI = ((r.pe?.oi||0)/100000).toFixed(1)+'L';
+    const sig = r.strike===s.callWall ? '<span class="tag tr">Resist</span>' : r.strike===s.putWall ? '<span class="tag tg">Support</span>' : r.strike===s.maxPain ? '<span class="tag ta">Max Pain</span>' : '';
+    html += `<tr${r.isAtm?' class="atm"':''}><td class="cc">${cOI}</td><td class="cc">${(r.ce?.ltp||0).toFixed(0)}</td><td class="sc">${fmt(r.strike)}${r.isAtm?' ◀ATM':''}</td><td class="pc">${(r.pe?.ltp||0).toFixed(0)}</td><td class="pc">${pOI}</td><td>${sig}</td></tr>`;
   });
   html += '</tbody></table>';
-  const wrap = document.getElementById(`${pref}-table-wrap`);
-  if (wrap) wrap.innerHTML = html;
+  const tbl = document.getElementById(`${p}-tbl`);
+  if (tbl) tbl.innerHTML = html;
 }
 
-function updateFIIDisplay() {
-  const f = STATE.fii;
-  const netCr = (f.net / 100).toFixed(0);
-  const html = f.buyVal ? `
-    <div class="stat-row"><span class="stat-key">FII Buy value</span><span class="stat-val" style="color:var(--green)">₹${(f.buyVal/100).toFixed(0)} Cr</span></div>
-    <div class="stat-row"><span class="stat-key">FII Sell value</span><span class="stat-val" style="color:var(--red)">₹${(f.sellVal/100).toFixed(0)} Cr</span></div>
-    <div class="stat-row"><span class="stat-key">FII Net</span><span class="stat-val" style="${f.net > 0 ? 'color:var(--green)' : 'color:var(--red)'}">₹${netCr} Cr ${f.net > 0 ? '▲ Long' : '▼ Short'}</span></div>
-  ` : '<div style="color:var(--text2);font-size:12px;padding:8px 0">Fetching FII data from NSE...</div>';
-  const el = document.getElementById('fii-data-display');
-  if (el) el.innerHTML = html;
-  setEl('fii-net-fut', f.net > 0 ? `+₹${netCr} Cr (Long)` : f.net < 0 ? `-₹${Math.abs(netCr)} Cr (Short)` : '—');
-  colorEl('fii-net-fut', f.net > 0 ? 'var(--green)' : 'var(--red)');
-  setEl('fii-ce-signal', f.net > 0 ? '✓ Strong — FII long' : '✗ Weak — FII short');
-  colorEl('fii-ce-signal', f.net > 0 ? 'var(--green)' : 'var(--red)');
-  setEl('fii-pe-signal', f.net < 0 ? '✓ Strong — FII short' : '✗ Weak — FII long');
-  setEl('fii-overall-bias', f.net > 0 ? 'BULLISH' : f.net < 0 ? 'BEARISH' : '—');
-  colorEl('fii-overall-bias', f.net > 0 ? 'var(--green)' : 'var(--red)');
+function updateFIIUI() {
+  const f = S.fii;
+  const netCr = (f.net/100).toFixed(0);
+  const el = document.getElementById('fii-data-block');
+  if (el) el.innerHTML = f.buyVal ? `
+    <div class="sr"><span class="sr-k">FII Buy value</span><span class="sr-v" style="color:var(--green)">₹${(f.buyVal/100).toFixed(0)} Cr</span></div>
+    <div class="sr"><span class="sr-k">FII Sell value</span><span class="sr-v" style="color:var(--red)">₹${(f.sellVal/100).toFixed(0)} Cr</span></div>
+    <div class="sr"><span class="sr-k">FII Net</span><span class="sr-v" style="color:${f.net>=0?'var(--green)':'var(--red)'}">₹${netCr} Cr ${f.net>=0?'▲ Long':'▼ Short'}</span></div>
+  ` : '<div style="color:var(--text2);font-size:12px;padding:8px 0">FII data fetched from Dhan market status. Limited data available on this endpoint.</div>';
+  setText('fii-net-v', f.net ? (f.net>=0?'+':'')+netCr+' Cr' : '—'); setColor('fii-net-v', f.net>=0?'var(--green)':'var(--red)');
+  setText('fii-ce-s', f.net>0?'✓ Strong':'✗ Weak FII'); setColor('fii-ce-s', f.net>0?'var(--green)':'var(--red)');
+  setText('fii-pe-s', f.net<0?'✓ Strong':'✗ Weak FII'); setColor('fii-pe-s', f.net<0?'var(--green)':'var(--red)');
+  setText('fii-bias', f.net>0?'BULLISH':f.net<0?'BEARISH':'NEUTRAL'); setColor('fii-bias', f.net>0?'var(--green)':f.net<0?'var(--red)':'var(--amber)');
+  setText('fii-combined', f.net>0?'BUY CALLS ✓':f.net<0?'BUY PUTS':'NEUTRAL');
 }
 
 function updateProbBreakdown() {
   ['nf','bn'].forEach(key => {
-    const s = STATE[key];
-    const el = document.getElementById(`${key}-prob-breakdown`);
-    if (!el || !s.probReasons) return;
+    const s = S[key]; const el = document.getElementById(`prob-${key}-breakdown`); if(!el||!s.probReasons) return;
     let html = '';
     s.probReasons.forEach(r => {
-      const pct = Math.round((r.score / r.max) * 100);
-      html += `<div class="stat-row"><span class="stat-key">${r.label}</span><div style="display:flex;align-items:center;gap:8px"><div style="width:80px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="width:${pct}%;height:4px;background:${pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)'}"></div></div><span class="stat-val" style="color:${pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)'}">${r.score}/${r.max}</span><span style="font-size:11px;color:var(--text3)">${r.detail}</span></div></div>`;
+      const pct = Math.round(r.s/r.m*100);
+      html += `<div class="sr"><span class="sr-k">${r.l}</span><div style="display:flex;align-items:center;gap:8px"><div style="width:70px;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden"><div style="width:${pct}%;height:4px;background:${pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)'}"></div></div><span class="sr-v" style="color:${pct>=70?'var(--green)':pct>=40?'var(--amber)':'var(--red)'};font-size:11px">${r.s}/${r.m}</span><span style="font-size:10px;color:var(--text3)">${r.d}</span></div></div>`;
     });
-    html += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;font-weight:600">Total</span><span style="font-size:22px;font-weight:700;font-family:monospace;color:${s.prob>=70?'var(--green)':s.prob>=60?'var(--amber)':'var(--red)'}">${s.prob}/100 ${s.prob>=70?'✓':''}</span></div>`;
+    html += `<div style="margin-top:12px;padding-top:12px;border-top:2px solid var(--border2);display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:700">Total</span><span style="font-size:22px;font-weight:700;font-family:monospace;color:${probColor(s.prob)}">${s.prob}/100${s.prob>=70?' ✓':''}</span></div>`;
     el.innerHTML = html;
+    // Also update signal page breakdown
+    const sd = document.getElementById(`sig-nf-prob-detail`);
+    if (key==='nf'&&sd) sd.innerHTML = `<span style="font-size:13px;font-weight:700;color:${probColor(s.prob)}">Score: ${s.prob}/100 — ${s.prob>=70?'✓ Trade Allowed':'✗ Below threshold'}</span>`;
   });
-  const nfEl = document.getElementById('nf-prob-detail');
-  if (nfEl && STATE.nf.prob) nfEl.innerHTML = `<div style="font-size:13px;color:${STATE.nf.prob>=70?'var(--green)':STATE.nf.prob>=60?'var(--amber)':'var(--red)'};font-weight:600">Score: ${STATE.nf.prob}/100 — ${STATE.nf.prob>=70?'✓ Trade allowed':'✗ Below threshold'}</div>`;
 }
 
-function updateNSEDataSummary() {
-  const el = document.getElementById('nse-data-summary');
-  if (!el) return;
-  if (!STATE.lastFetch) { el.textContent = 'Connecting to NSE...'; return; }
-  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:12px">
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">Last fetch</div><div style="color:var(--green);font-weight:600">${STATE.lastFetch.toLocaleTimeString('en-IN')}</div></div>
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">Fetch count</div><div style="color:var(--text);font-weight:600">${STATE.fetchCount}</div></div>
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">Next in</div><div style="color:var(--amber);font-weight:600" id="next-in-summary">${STATE.nextFetchIn}s</div></div>
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">Nifty PCR</div><div style="color:${STATE.nf.pcr>=1.1?'var(--green)':'var(--amber)'};font-weight:600">${STATE.nf.pcr.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">BNifty PCR</div><div style="color:${STATE.bn.pcr>=1.1?'var(--green)':'var(--amber)'};font-weight:600">${STATE.bn.pcr.toFixed(2)}</div></div>
-    <div style="text-align:center"><div style="color:var(--text3);margin-bottom:3px">Data source</div><div style="color:var(--blue);font-weight:600">NSE India</div></div>
-  </div>`;
+function updatePnL() {
+  let nPnl=0, bPnl=0;
+  if (S.nf.active&&S.nf.entryPrice) nPnl=Math.round((S.nf.ltp-S.nf.entryPrice)*50);
+  if (S.bn.active&&S.bn.entryPrice) bPnl=Math.round((S.bn.ltp-S.bn.entryPrice)*15);
+  const tot = nPnl+bPnl;
+  const pf = v => (v>=0?'+':'')+'₹'+Math.abs(v).toLocaleString('en-IN');
+  const pc = v => v>=0?'var(--green)':'var(--red)';
+  setText('d-pnl',pf(tot)); setColor('d-pnl',pc(tot));
+  setText('cap-pnl',pf(tot)); setColor('cap-pnl',pc(tot));
+  setText('d-nf-pnl',pf(nPnl)); setColor('d-nf-pnl',pc(nPnl));
+  setText('d-bn-pnl',pf(bPnl)); setColor('d-bn-pnl',pc(bPnl));
+  updateBar('d-nf-bar',S.nf.ltp,S.nf.sl||0,S.nf.entryPrice||0,S.nf.t2||1);
+  updateBar('d-bn-bar',S.bn.ltp,S.bn.sl||0,S.bn.entryPrice||0,S.bn.t2||1);
+  const nd=S.nf.entryPrice*50, bd=S.bn.entryPrice*15;
+  setText('cap-deployed','₹'+(nd+bd).toLocaleString('en-IN'));
+  setText('cap-worst','-₹'+(Math.round(nd*0.3)+Math.round(bd*0.3)).toLocaleString('en-IN'));
+  setText('cap-best','+₹'+(Math.round(nd*0.8)+Math.round(bd*0.8)).toLocaleString('en-IN'));
 }
-
-function updateTradePnL() {
-  let nfPnl = 0, bnPnl = 0;
-  if (STATE.nf.active && STATE.nf.entryPrice) nfPnl = Math.round((STATE.nf.ltp - STATE.nf.entryPrice) * 50);
-  if (STATE.bn.active && STATE.bn.entryPrice) bnPnl = Math.round((STATE.bn.ltp - STATE.bn.entryPrice) * 15);
-  const total = nfPnl + bnPnl;
-  const pnlFmt = v => (v >= 0 ? '+' : '') + '₹' + Math.abs(v).toLocaleString('en-IN');
-  const pnlColor = v => v >= 0 ? 'var(--green)' : 'var(--red)';
-  setEl('dash-pnl', pnlFmt(total)); colorEl('dash-pnl', pnlColor(total));
-  setEl('cap-pnl', pnlFmt(total)); colorEl('cap-pnl', pnlColor(total));
-  setEl('d-nf-pnl', pnlFmt(nfPnl)); colorEl('d-nf-pnl', pnlColor(nfPnl));
-  setEl('d-bn-pnl', pnlFmt(bnPnl)); colorEl('d-bn-pnl', pnlColor(bnPnl));
-  updateBar('d-nf-bar', STATE.nf.ltp, STATE.nf.slPrice || 0, STATE.nf.entryPrice || 0, STATE.nf.t2Price || 1);
-  updateBar('d-bn-bar', STATE.bn.ltp, STATE.bn.slPrice || 0, STATE.bn.entryPrice || 0, STATE.bn.t2Price || 1);
-
-  // capital summary
-  const nfDep = STATE.nf.entryPrice * 50;
-  const bnDep = STATE.bn.entryPrice * 15;
-  setEl('cap-deployed', '₹' + (nfDep + bnDep).toLocaleString('en-IN'));
-  setEl('cap-worst', '-₹' + Math.abs(Math.round(nfDep * 0.3) + Math.round(bnDep * 0.3)).toLocaleString('en-IN'));
-  setEl('cap-best', '+₹' + (Math.round(nfDep * 0.8) + Math.round(bnDep * 0.8)).toLocaleString('en-IN'));
-}
-
-// ===================== TRADE ACTIONS =====================
-function autoExit(key, reason) {
-  const s = STATE[key];
-  const ltp = s.ltp;
-  const entry = s.entryPrice;
-  const mult = key === 'nf' ? 50 : 15;
-  const name = key === 'nf' ? 'NIFTY' : 'BANKNIFTY';
-  const pnl = Math.round((ltp - entry) * mult);
-  s.active = false;
-  STATE.history.push({ name: `${name} ${s.strike} CE`, entry, exit: Math.round(ltp), pnl, reason, time: new Date().toLocaleTimeString('en-IN') });
-  STATE.histPnl += pnl;
-  addLog(reason.includes('SL') ? 'var(--red)' : 'var(--green)', `${reason} — ${name} ${s.strike} CE @ ₹${Math.round(ltp)} · ${pnl >= 0 ? '+' : ''}₹${pnl}`);
-  renderHistory();
-  renderTradeCards();
-}
-
-function manualExit(key) {
-  if (!STATE[key].active) return;
-  autoExit(key, 'Manual exit');
-}
-
-function trailSL(key) {
-  if (!STATE[key].active) return;
-  STATE[key].sl = STATE[key].entryPrice;
-  STATE[key].slPrice = STATE[key].entryPrice;
-  addLog('var(--amber)', `SL trailed to entry — ${key === 'nf' ? 'Nifty' : 'BankNifty'} CE SL → ₹${STATE[key].entryPrice} (risk-free)`);
-}
-
-function exitAll() { manualExit('nf'); manualExit('bn'); }
 
 function renderTradeCards() {
-  const c = document.getElementById('trades-container');
-  const w = document.getElementById('trades-warn');
-  const active = STATE.nf.active || STATE.bn.active;
-  if (w) w.style.display = active ? 'none' : 'block';
-  if (!c) return;
-  let html = '';
+  const el=document.getElementById('trades-cards'), w=document.getElementById('trades-warn');
+  const any = S.nf.active||S.bn.active;
+  if(w) w.style.display = any?'none':'block';
+  if(!el) return;
+  let html='';
   ['nf','bn'].forEach(key => {
-    const s = STATE[key]; if (!s.active) return;
-    const name = key === 'nf' ? 'NIFTY' : 'BANKNIFTY';
-    const pnl = Math.round((s.ltp - s.entryPrice) * (key === 'nf' ? 50 : 15));
-    html += `<div class="card" style="border-color:var(--green-border)">
-      <div class="card-title"><span class="dot" style="background:var(--green)"></span>${name} ${s.strike} CE — LIVE <span class="tag tag-g" style="margin-left:auto">${s.prob}%</span></div>
-      <div class="levels">
-        <div class="level lv-entry"><div class="level-label">Entry</div><div class="level-val">₹${s.entryPrice}</div></div>
-        <div class="level lv-sl"><div class="level-label">SL</div><div class="level-val">₹${s.slPrice}</div></div>
-        <div class="level lv-t1"><div class="level-label">T1</div><div class="level-val">₹${s.t1Price}</div></div>
-        <div class="level lv-t2"><div class="level-label">T2</div><div class="level-val">₹${s.t2Price}</div></div>
-        <div class="level lv-ltp"><div class="level-label">LTP</div><div class="level-val" style="color:${s.ltp>=s.entryPrice?'var(--green)':'var(--red)'}">₹${fmt2(s.ltp)}</div></div>
+    const s=S[key]; if(!s.active) return;
+    const name=key==='nf'?'NIFTY':'BANKNIFTY', mult=key==='nf'?50:15;
+    const pnl=Math.round((s.ltp-s.entryPrice)*mult);
+    html+=`<div class="trade-live-card">
+      <div class="ctitle"><span class="cdot" style="background:var(--green)"></span>${name} ${s.strike} CE LIVE <span class="tag tg" style="margin-left:auto">Prob ${s.prob}%</span></div>
+      <div class="lvls">
+        <div class="lv lv-entry"><div class="lv-l">Entry</div><div class="lv-v">₹${s.entryPrice}</div></div>
+        <div class="lv lv-sl"><div class="lv-l">SL</div><div class="lv-v">₹${s.sl}</div></div>
+        <div class="lv lv-t1"><div class="lv-l">T1</div><div class="lv-v">₹${s.t1}</div></div>
+        <div class="lv lv-t2"><div class="lv-l">T2</div><div class="lv-v">₹${s.t2}</div></div>
+        <div class="lv lv-ltp"><div class="lv-l">LTP</div><div class="lv-v" style="color:${s.ltp>=s.entryPrice?'var(--green)':'var(--red)'}">₹${s.ltp.toFixed(1)}</div></div>
       </div>
-      <div class="pnl-row"><span class="pnl-label">Paper P&L (${key === 'nf' ? 50 : 15} units)</span><span class="pnl-val" style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}₹${Math.abs(pnl).toLocaleString('en-IN')}</span></div>
+      <div class="pnl-row"><span class="pnl-lbl">Paper P&L · ${mult} units</span><span class="pnl-val" style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}₹${Math.abs(pnl).toLocaleString('en-IN')}</span></div>
       <div class="btn-row">
-        <button class="btn btn-red" onclick="manualExit('${key}')">Exit Now</button>
-        <button class="btn btn-amber" onclick="trailSL('${key}')">Trail SL → ₹${s.entryPrice}</button>
+        <button class="btn btn-r" onclick="manualExit('${key}')">Exit Now</button>
+        <button class="btn btn-a" onclick="trailSL('${key}')">Trail SL → ₹${s.entryPrice}</button>
       </div>
     </div>`;
   });
-  c.innerHTML = html;
+  el.innerHTML = html;
 }
 
 function renderHistory() {
-  const el = document.getElementById('history-list');
-  if (!el) return;
-  const h = STATE.history;
-  if (!h.length) { el.innerHTML = '<div style="color:var(--text2);text-align:center;padding:24px 0">No completed trades yet.</div>'; return; }
-  const wins = h.filter(t => t.pnl > 0).length;
-  setEl('hist-count', h.length); setEl('hist-wins', wins); setEl('hist-losses', h.length - wins);
-  setEl('hist-pnl', (STATE.histPnl >= 0 ? '+' : '') + '₹' + Math.abs(STATE.histPnl).toLocaleString('en-IN'));
-  colorEl('hist-pnl', STATE.histPnl >= 0 ? 'var(--green)' : 'var(--red)');
-  el.innerHTML = h.slice().reverse().map(t => `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-    <div><div style="font-size:13px;font-weight:600">${t.name}</div><div style="font-size:11px;color:var(--text2)">${t.time} · Entry ₹${t.entry} → Exit ₹${t.exit} · ${t.reason}</div></div>
-    <div style="font-size:16px;font-weight:700;font-family:monospace;color:${t.pnl>=0?'var(--green)':'var(--red)'}">${t.pnl>=0?'+':''}₹${Math.abs(t.pnl).toLocaleString('en-IN')}</div>
-  </div>`).join('');
+  const h=S.history;
+  setText('hist-total',h.length); setText('hist-wins',h.filter(t=>t.pnl>0).length); setText('hist-losses',h.filter(t=>t.pnl<=0).length);
+  setText('hist-pnl',(S.histPnl>=0?'+':'')+'₹'+Math.abs(S.histPnl).toLocaleString('en-IN'));
+  setColor('hist-pnl',S.histPnl>=0?'var(--green)':'var(--red)');
+  const el=document.getElementById('hist-list');
+  if(!el) return;
+  el.innerHTML = h.length ? h.slice().reverse().map(t=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:13px;font-weight:600;color:var(--text)">${t.name}</div><div style="font-size:11px;color:var(--text2)">${t.time} · ₹${t.entry}→₹${t.exit} · ${t.reason}</div></div>
+      <div style="font-size:15px;font-weight:700;font-family:monospace;color:${t.pnl>=0?'var(--green)':'var(--red)'}">${t.pnl>=0?'+':''}₹${Math.abs(t.pnl).toLocaleString('en-IN')}</div>
+    </div>`).join('')
+  : '<div style="text-align:center;padding:24px;color:var(--text2)">No completed trades yet.</div>';
 }
 
-// ===================== UTILS =====================
-function setEl(id, val) { const e = document.getElementById(id); if (e) e.textContent = val; }
-function colorEl(id, c) { const e = document.getElementById(id); if (e) e.style.color = c; }
+function renderOrderBook() {
+  const el=document.getElementById('order-book-list');
+  if(!el) return;
+  el.innerHTML = S.orders.length ? S.orders.slice().reverse().map(o=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:12px;font-weight:600;color:var(--text)">${o.side} · SecID ${o.secId} · Qty ${o.qty}</div><div style="font-size:11px;color:var(--text2)">${o.time} · OrderID: ${o.orderId}</div></div>
+      <span class="order-badge ob-filled">PLACED</span>
+    </div>`).join('')
+  : '<div style="text-align:center;padding:20px;color:var(--text2)">No orders today.</div>';
+}
+
+// ─── SETTINGS ───
+function saveCredentials() {
+  const cid = document.getElementById('s-client-id').value.trim();
+  const tok = document.getElementById('s-access-token').value.trim();
+  if (!cid || !tok) { setText('creds-status','⚠ Please enter both Client ID and Access Token'); setColor('creds-status','var(--red)'); return; }
+  localStorage.setItem('dhan_client_id', cid);
+  localStorage.setItem('dhan_token', tok);
+  localStorage.setItem('dhan_mode', document.getElementById('s-trade-mode').value);
+  S.creds = { clientId:cid, token:tok };
+  S.mode = document.getElementById('s-trade-mode').value;
+  updateMode();
+  setText('creds-status','✓ Credentials saved. Testing connection…'); setColor('creds-status','var(--green)');
+  setConnBadge('loading','Connecting…');
+  fetchAll();
+}
+
+async function testDhanConnection() {
+  if (!S.creds.token) { setText('creds-status','Enter credentials first'); return; }
+  setText('creds-status','Testing…'); setColor('creds-status','var(--amber)');
+  try {
+    const data = await dhanFetch('/v2/funds/overview');
+    const bal = data?.data?.availabelBalance || data?.availableBalance || data?.data?.withdrawableBalance || '—';
+    setText('creds-status',`✓ Dhan connected! Available balance: ₹${bal}`);
+    setColor('creds-status','var(--green)');
+    setConnBadge('ok','Dhan Connected ✓');
+    S.connected = true;
+    addLog('var(--green)',`Dhan API verified ✓ Balance: ₹${bal}`);
+    fetchAll();
+  } catch(e) {
+    setText('creds-status','✗ Connection failed: '+e.message);
+    setColor('creds-status','var(--red)');
+    setConnBadge('err','Auth failed');
+    addLog('var(--red)','Dhan connection test failed: '+e.message);
+  }
+}
+
+function clearCredentials() {
+  localStorage.removeItem('dhan_client_id'); localStorage.removeItem('dhan_token');
+  document.getElementById('s-client-id').value = ''; document.getElementById('s-access-token').value = '';
+  S.creds = {clientId:'',token:''}; S.connected = false;
+  setConnBadge('off','Not connected'); setText('creds-status','Credentials cleared.');
+}
+
+function updateMode() {
+  S.mode = document.getElementById('s-trade-mode').value;
+  const lbl = document.getElementById('d-mode-lbl');
+  const foot = document.getElementById('mode-footer-lbl');
+  if (S.mode === 'live') {
+    if (lbl) { lbl.textContent='🚀 LIVE ORDERS'; lbl.style.color='var(--red)'; }
+    if (foot) { foot.textContent='🚀 LIVE MODE'; foot.style.color='var(--red)'; }
+  } else {
+    if (lbl) { lbl.textContent='📋 Paper mode'; lbl.style.color='var(--blue)'; }
+    if (foot) { foot.textContent='📋 Paper Trade Mode'; foot.style.color='var(--amber)'; }
+  }
+}
+
+function toggleSetting(key) {
+  S.toggles[key] = !S.toggles[key];
+  const el = document.getElementById('tog-'+key);
+  if (el) el.classList.toggle('on', S.toggles[key]);
+}
+
+// ─── NAVIGATION ───
+function nav(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const pg = document.getElementById('pg-'+id);
+  if (pg) pg.classList.add('active');
+  const nb = document.getElementById('nb-'+id);
+  if (nb) nb.classList.add('active');
+}
+
+function switchTab(group, key) {
+  const panels = group==='sig' ? ['sig-nf','sig-bn'] : ['oi-nf','oi-bn'];
+  const btns   = group==='sig' ? ['st-nf','st-bn'] : ['ot-nf','ot-bn'];
+  panels.forEach(p => { const e=document.getElementById(p); if(e) e.classList.remove('vis'); });
+  btns.forEach(b => { const e=document.getElementById(b); if(e) e.className='tab-b'; });
+  const tp = document.getElementById(`${group==='sig'?'sig':'oi'}-${key}`);
+  const tb = document.getElementById(`${group==='sig'?'st':'ot'}-${key}`);
+  if (tp) tp.classList.add('vis');
+  if (tb) tb.className = 'tab-b '+(key==='nf'?'tnf':'tbn');
+}
+
+// ─── HELPERS ───
+function setText(id, v) { const e=document.getElementById(id); if(e) e.textContent=v; }
+function setColor(id, c) { const e=document.getElementById(id); if(e) e.style.color=c; }
+function pad(n) { return String(n).padStart(2,'0'); }
 function fmt(n) { return n ? Math.round(n).toLocaleString('en-IN') : '—'; }
-function fmt2(n) { return n ? n.toFixed(1) : '—'; }
+function probColor(p) { return p>=70?'var(--green)':p>=55?'var(--amber)':'var(--red)'; }
+function updatePCRMetric(vid, lid, pcr) {
+  setText(vid, pcr.toFixed(2)); setColor(vid, pcr>=1.1?'var(--green)':pcr>=0.9?'var(--amber)':'var(--red)');
+  setText(lid, pcr>=1.1?'▲ Bullish':pcr>=0.9?'Neutral':'▼ Bearish');
+  setColor(lid, pcr>=1.1?'var(--green)':pcr>=0.9?'var(--amber)':'var(--red)');
+}
 function setChg(id, cur, prev) {
-  const el = document.getElementById(id); if (!el || !prev) return;
-  const d = cur - prev, pct = ((d / prev) * 100).toFixed(2);
-  el.textContent = (d >= 0 ? '▲ +' : '▼ ') + Math.abs(d).toFixed(0) + ' (' + (d >= 0 ? '+' : '') + pct + '%)';
-  el.className = 'idx-chg ' + (d >= 0 ? 'up' : 'down');
+  const el=document.getElementById(id); if(!el||!prev) return;
+  const d=cur-prev, p=((d/prev)*100).toFixed(2);
+  el.textContent=(d>=0?'▲ +':'▼ ')+Math.abs(d).toFixed(0)+' ('+(d>=0?'+':'')+p+'%)';
+  el.style.color=d>=0?'var(--green)':'var(--red)';
 }
 function setChgEl(id, cur, prev) {
-  const el = document.getElementById(id); if (!el || !prev) return;
-  const d = cur - prev;
-  el.textContent = (d >= 0 ? '▲ +' : '▼ ') + Math.abs(d).toFixed(0);
-  el.style.color = d >= 0 ? 'var(--green)' : 'var(--red)';
+  const el=document.getElementById(id); if(!el||!prev) return;
+  const d=cur-prev;
+  el.textContent=(d>=0?'▲ +':'▼ ')+Math.abs(d).toFixed(0); el.style.color=d>=0?'var(--green)':'var(--red)';
 }
 function updateBar(id, ltp, sl, entry, t2) {
-  const el = document.getElementById(id); if (!el || !entry || !t2) return;
-  const range = t2 - sl, pos = Math.min(Math.max(ltp, sl), t2);
-  el.style.width = Math.round(((pos - sl) / range) * 100) + '%';
-  el.style.background = ltp >= entry * 1.4 ? 'var(--green)' : ltp < entry ? 'var(--red)' : 'var(--amber)';
+  const el=document.getElementById(id); if(!el||!entry||!t2||t2<=sl) return;
+  const pct=Math.round(((Math.min(Math.max(ltp,sl),t2)-sl)/(t2-sl))*100);
+  el.style.width=pct+'%'; el.style.background=ltp>=entry*1.4?'var(--green)':ltp<entry?'var(--red)':'var(--amber)';
 }
-function setStatus(type, text) {
-  const b = document.getElementById('data-status-badge');
-  const t = document.getElementById('data-status-text');
-  if (!b || !t) return;
-  b.className = 'data-badge ' + (type === 'live' ? 'data-live' : type === 'error' ? 'data-error' : 'data-loading');
-  t.textContent = text;
+function setConnBadge(type, text) {
+  const el=document.getElementById('conn-badge');
+  if(!el) return;
+  el.className='conn-badge cb-'+({'ok':'ok','loading':'loading','err':'err','off':'off'}[type]||'off');
+  el.innerHTML=`<span class="${type==='ok'?'blink':''}" style="font-size:8px">${type==='ok'?'●':type==='loading'?'◌':'○'}</span><span id="conn-text">${text}</span>`;
 }
-function addLog(color, text) {
-  const log = document.getElementById('dash-log'); if (!log) return;
-  const ts = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
-  const div = document.createElement('div');
-  div.className = 'log-entry';
-  div.innerHTML = `<div class="log-time">${ts}</div><div class="log-dot" style="background:${color};width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0"></div><div class="log-text">${text}</div>`;
-  log.appendChild(div);
-  if (log.children.length > 20) log.removeChild(log.firstChild);
+function addLog(color, msg) {
+  const el=document.getElementById('trade-log'); if(!el) return;
+  const t=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const d=document.createElement('div'); d.className='log-item';
+  d.innerHTML=`<div class="log-t">${t}</div><div class="log-d" style="background:${color}"></div><div class="log-m">${msg}</div>`;
+  el.appendChild(d);
+  if(el.children.length>25) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
 }
-
-// ===================== NAVIGATION =====================
-function showPage(id, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const pg = document.getElementById('page-' + id);
-  if (pg) pg.classList.add('active');
-  if (btn) btn.classList.add('active');
-  else { document.querySelectorAll('.nav-item').forEach(n => { if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'"+id+"'")) n.classList.add('active'); }); }
-}
-
-function switchSigTab(id) {
-  ['nf','bn'].forEach(t => {
-    document.getElementById('sig-panel-'+t).classList.remove('visible');
-    document.getElementById('sig-tab-'+t).className = 'tab-btn';
-  });
-  document.getElementById('sig-panel-'+id).classList.add('visible');
-  document.getElementById('sig-tab-'+id).className = 'tab-btn ' + (id === 'nf' ? 'active-nf' : 'active-bn');
-}
-function switchOITab(id) {
-  ['nf','bn'].forEach(t => {
-    document.getElementById('oi-panel-'+t).classList.remove('visible');
-    document.getElementById('oi-tab-'+t).className = 'tab-btn';
-  });
-  document.getElementById('oi-panel-'+id).classList.add('visible');
-  document.getElementById('oi-tab-'+id).className = 'tab-btn ' + (id === 'nf' ? 'active-nf' : 'active-bn');
-}
-function toggleSetting(key) {
-  toggleState[key] = !toggleState[key];
-  const el = document.getElementById('toggle-' + key);
-  if (el) el.classList.toggle('on', toggleState[key]);
-}
-
-// ===================== INIT =====================
-setInterval(updateClock, 1000);
-updateClock();
-
-// First fetch on load
-setTimeout(() => fetchAllData(), 1500);
-
-// Auto refresh every 3 minutes
-setInterval(() => {
-  STATE.nextFetchIn--;
-  const ni = document.getElementById('next-in-summary');
-  if (ni) ni.textContent = STATE.nextFetchIn + 's';
-}, 1000);
-
-// Update date
-const now = new Date();
-const dateEl = document.getElementById('dash-date');
-if (dateEl) dateEl.textContent = now.toLocaleDateString('en-IN', {day:'numeric',month:'long',year:'numeric'}) + ' · 9–11 AM intraday option buying';
 </script>
 </body>
 </html>
