@@ -1063,11 +1063,13 @@ async function testDhan(){
   if(!S.creds.tok){set('dhan-stat','Enter credentials first');return;}
   set('dhan-stat','Testing…');col_('dhan-stat','var(--amber)');
   try{
-    const data=await dhan('/v2/funds/overview');
-    const bal=data?.data?.availabelBalance||data?.availableBalance||'—';
-    set('dhan-stat',`✓ Dhan connected! Balance: ₹${typeof bal==='number'?bal.toFixed(2):bal}`);
+    const data=await dhan('/v2/fundlimit');
+    const d=data?.data||data;
+    const bal=d?.availableBalance||d?.sodLimit||d?.withdrawableBalance||'OK';
+    const balStr=typeof bal==='number'?'₹'+bal.toFixed(2):String(bal);
+    set('dhan-stat','✓ Dhan proxy working! '+balStr);
     col_('dhan-stat','var(--green)');setBadge('ok','Dhan ✓');S.connected=true;
-    addLog('var(--green)',`Dhan verified ✓ Balance: ₹${bal}`);fetchAll();
+    addLog('var(--green)','Dhan connected ✓ '+balStr);fetchAll();
   }catch(e){set('dhan-stat','✗ '+e.message);col_('dhan-stat','var(--red)');setBadge('err','Auth failed');}
 }
 
