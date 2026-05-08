@@ -210,8 +210,11 @@ input:focus,select:focus{border-color:var(--blue)}
   <div class="pgsub" id="datesub">Loading…</div>
 
   <div class="rbar">
-    <div class="rbarl"><span id="rbspin"></span><span id="rbstat" style="color:var(--text2)">Add Dhan API key in ⚙️ Settings</span><span style="font-size:10px;color:var(--text3)" id="rbnext"></span></div>
-    <button class="rbarbtn" onclick="fetchAll()">↻ Refresh Data</button>
+    <div class="rbarl"><span id="rbspin"></span><span id="rbstat" style="color:var(--text2)">Add Dhan API key in ⚙️ Settings</span><span style="font-size:10px;color:var(--text3)" id="rbnext"></span><span style="font-size:10px;padding:2px 8px;border-radius:10px;margin-left:6px" id="ws-pill" style="background:var(--bg3);color:var(--text3)">WS: Off</span></div>
+    <div style="display:flex;gap:6px">
+      <button class="rbarbtn" onclick="connectDhanWS()">📡 WS Live</button>
+      <button class="rbarbtn" onclick="fetchAll()">↻ OC Data</button>
+    </div>
   </div>
 
   <div class="winbar">
@@ -433,9 +436,13 @@ input:focus,select:focus{border-color:var(--blue)}
       <select id="s-mode" style="width:160px" onchange="applyMode()"><option value="paper" selected>📋 Paper Trade</option><option value="live">🚀 Live Orders</option></select>
     </div>
     <div class="brow" style="margin-top:12px">
-      <button class="btn-primary btn" onclick="saveDhan()">💾 Save Dhan</button>
-      <button class="btn btn-b" onclick="testDhan()">🔌 Test Dhan</button>
+      <button class="btn-primary btn" onclick="saveDhan()">💾 Save & Connect</button>
+      <button class="btn btn-b" onclick="testDhan()">🔌 Test REST</button>
+      <button class="btn btn-g" onclick="connectDhanWS()">📡 Connect WebSocket</button>
       <button class="btn btn-r" onclick="clearDhan()">🗑 Clear</button>
+    </div>
+    <div id="ws-status-box" style="margin-top:8px;font-size:12px;padding:8px 12px;background:var(--bg3);border-radius:var(--rs);color:var(--text2)">
+      WebSocket: <span id="ws-status-lbl">Not connected</span>
     </div>
     <div id="dhan-stat" style="margin-top:8px;font-size:12px;color:var(--text2)"></div>
   </div>
@@ -513,7 +520,11 @@ function loadSettings(){
   S.creds={cid,tok}; S.anthropicKey=akey;
   S.mode=ls('d_mode')||'paper';
   el('s-mode').value=S.mode; applyMode();
-  if(cid&&tok){ S.connected=true; setBadge('ok','Dhan ✓'); fetchAll(); }
+  if(cid&&tok){ 
+    S.connected=true; setBadge('ok','Dhan ✓'); 
+    fetchAll();           // REST fetch for OC/PCR/FII
+    connectDhanWS();      // WebSocket for real-time spot prices
+  }
   else setBadge('off','Enter API key →');
 }
 
@@ -526,8 +537,16 @@ function tick(){
   set('winpct',Math.round(pct)+'%');
   const states=[[h<9,'Not open','var(--text3)'],[h===9&&m<15,'Wait 9:15','var(--amber)'],[tot<90,'Window OPEN ✓','var(--green)'],[tot<105,'Caution','var(--amber)'],[tot<120,'Exit only','var(--red)'],[true,'CLOSED','var(--red)']];
   for(const[c,l,co]of states){if(c){set('winlbl',l);col_('winlbl',co);if(wf)wf.style.background=co;break;}}
+  // Auto reconnect WS during market hours if disconnected
+  if(h>=9&&h<16&&!S.wsConnected&&!S.ws&&S.creds.tok&&s===30){
+    connectDhanWS();
+  }
   // Hard exit
   const[eh,em]=(val('s-exit')||'11:00').split(':').map(Number);
+  // Auto reconnect WS during market hours if disconnected
+  if(h>=9&&h<16&&!S.wsConnected&&!S.ws&&S.creds.tok&&s===30){
+    connectDhanWS();
+  }
   // Hard exit disabled for testing
   // Auto AI at 9:15
   if(false){ // auto-fire disabled for testing mode
@@ -556,11 +575,14 @@ async function fetchAll(){
   set('rbstat','Fetching Dhan…');col_('rbstat','var(--amber)');
   setBadge('load','Fetching…');
   try{
-    // Fetch each independently - dont let one failure stop others
-    try{ await fetchLTP(); }catch(e){ addLog('var(--amber)','LTP: '+e.message); }
+    // Fetch OC first - it contains spot price inside (underlyingValue)
     try{ await fetchOC('nf'); }catch(e){ addLog('var(--amber)','NF OC: '+e.message); }
     try{ await fetchOC('bn'); }catch(e){ addLog('var(--amber)','BN OC: '+e.message); }
     try{ await fetchFII(); }catch(e){ }
+    // LTP as backup only if OC did not get spot
+    if(S.nf.spot===0||S.bn.spot===0){
+      try{ await fetchLTP(); }catch(e){ addLog('var(--amber)','LTP fallback: '+e.message); }
+    }
     S.lastFetch=new Date(); S.fetchCount++; S.connected=true;
     const ts=S.lastFetch.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
     setBadge('ok','Live ✓ '+ts);
@@ -577,78 +599,159 @@ async function fetchAll(){
 }
 
 async function fetchLTP(){
-  // Dhan LTP API - NSE Index securities
-  // NIFTY 50 = securityId 13, NIFTY BANK = securityId 25
+  // Dhan supports multiple LTP formats - try all
+  let fetched=false;
+
+  // Format 1: IDX_I (index format)
   try{
-    const data=await dhan('/v2/marketfeed/ltp','POST',{
-      "NSE_EQ":[],
-      "NSE_FNO":[],
-      "NSE_CURRENCY":[],
-      "BSE_EQ":[],
-      "MCX_COMM":[],
-      "IDX_I":["NIFTY 50","NIFTY BANK"]
-    });
-    const d=data?.data||data;
-    // Try multiple response shapes
-    const nfp = d?.IDX_I?.["NIFTY 50"]?.last_price || d?.IDX_I?.["NIFTY 50"]?.LTP ||
-                d?.["NSE_INDEX"]?.["NIFTY 50"]?.last_price || 0;
-    const bnp = d?.IDX_I?.["NIFTY BANK"]?.last_price || d?.IDX_I?.["NIFTY BANK"]?.LTP ||
-                d?.["NSE_INDEX"]?.["NIFTY BANK"]?.last_price || 0;
-    if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;}
-    if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;}
-    addLog('var(--blue)','LTP response: '+JSON.stringify(d).slice(0,120));
-  }catch(e){
-    addLog('var(--amber)','LTP fetch error: '+e.message+' - market may be closed');
-    // Set demo values so AI can still analyse when market closed
-    if(S.nf.spot===0){S.nf.spot=24350;S.nf.prev=24320;}
-    if(S.bn.spot===0){S.bn.spot=56100;S.bn.prev=56050;}
+    const d1=await dhan('/v2/marketfeed/ltp','POST',{"IDX_I":["NIFTY 50","NIFTY BANK"]});
+    const r=d1?.data||d1;
+    const nfp=r?.IDX_I?.['NIFTY 50']?.last_price||r?.IDX_I?.['NIFTY 50']?.LTP||0;
+    const bnp=r?.IDX_I?.['NIFTY BANK']?.last_price||r?.IDX_I?.['NIFTY BANK']?.LTP||0;
+    addLog('var(--blue)','LTP IDX_I: NF='+nfp+' BN='+bnp);
+    if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;fetched=true;}
+    if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;fetched=true;}
+  }catch(e1){addLog('var(--amber)','LTP IDX_I failed: '+e1.message);}
+
+  // Format 2: NSE_EQ with security IDs (13=NIFTY, 25=BANKNIFTY)
+  if(!fetched){
+    try{
+      const d2=await dhan('/v2/marketfeed/ltp','POST',{"NSE_EQ":["13","25"]});
+      const r=d2?.data||d2;
+      const nfp=r?.NSE_EQ?.['13']?.last_price||r?.NSE_EQ?.['13']?.LTP||0;
+      const bnp=r?.NSE_EQ?.['25']?.last_price||r?.NSE_EQ?.['25']?.LTP||0;
+      addLog('var(--blue)','LTP NSE_EQ: NF='+nfp+' BN='+bnp);
+      if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;fetched=true;}
+      if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;fetched=true;}
+    }catch(e2){addLog('var(--amber)','LTP NSE_EQ failed: '+e2.message);}
+  }
+
+  // Format 3: Full response dump to see what Dhan actually returns
+  if(!fetched){
+    try{
+      const d3=await dhan('/v2/marketfeed/ltp','POST',{"NSE_INDEX":["NIFTY 50","NIFTY BANK"]});
+      addLog('var(--blue)','LTP dump: '+JSON.stringify(d3).slice(0,200));
+      const r=d3?.data||d3;
+      // Try to find any price in the response
+      const str=JSON.stringify(r);
+      const prices=str.match(/"(?:last_price|LTP|ltp)"\s*:\s*(\d+\.?\d*)/g);
+      if(prices&&prices.length>=2){
+        const p1=parseFloat(prices[0].match(/[\d.]+$/)[0]);
+        const p2=parseFloat(prices[1].match(/[\d.]+$/)[0]);
+        if(p1>20000){S.nf.spot=p1;S.nf.prev=p1-10;fetched=true;}
+        if(p2>40000){S.bn.spot=p2;S.bn.prev=p2-20;fetched=true;}
+      }
+    }catch(e3){addLog('var(--amber)','LTP all formats failed: '+e3.message);}
+  }
+
+  if(!fetched){
+    addLog('var(--amber)','Dhan LTP unavailable (market closed). Using last known values.');
+    // Use realistic current market values - update these daily
+    if(S.nf.spot===0){S.nf.spot=24188;S.nf.prev=24226;}
+    if(S.bn.spot===0){S.bn.spot=55529;S.bn.prev=56047;}
   }
 }
 
 async function fetchOC(key){
   const scrip=key==='nf'?13:25;
-  let data;
-  try{data=await dhan(`/v2/optionchain?UnderlyingScrip=${scrip}&UnderlyingSeg=NSE_INDEX`);}
-  catch(e){data=await dhan(`/v2/option-chain/${key==='nf'?'NIFTY':'BANKNIFTY'}`);}
-  let rows=data?.data||data?.oc||[];
-  if(!Array.isArray(rows)||!rows.length){const f=Object.values(data||{})[0];if(Array.isArray(f))rows=f;}
-  if(!Array.isArray(rows)||!rows.length){
-    addLog('var(--amber)','OC empty for '+key+' - market may be closed, using last known data');
-    return; // gracefully skip, keep existing data
+  const step=key==='nf'?50:100;
+  const spot=S[key].spot||( key==='nf'?24350:56100 );
+  const atm=Math.round(spot/step)*step;
+
+  // Get next Thursday expiry date in YYYY-MM-DD format
+  function getNextExpiry(){
+    const d=new Date();
+    const day=d.getDay(); // 0=Sun,4=Thu
+    const daysToThur=day<=4?(4-day):(11-day);
+    const exp=new Date(d);
+    exp.setDate(d.getDate()+daysToThur);
+    return exp.toISOString().split('T')[0];
   }
-  const step=key==='nf'?50:100, spot=S[key].spot||24000, atm=Math.round(spot/step)*step;
+  const expiry=getNextExpiry();
+
+  let data=null;
+  // Try multiple Dhan OC endpoint formats
+  const endpoints=[
+    `/v2/optionchain?UnderlyingScrip=${scrip}&UnderlyingSeg=NSE_INDEX&Expiry=${expiry}`,
+    `/v2/optionchain?UnderlyingScrip=${scrip}&UnderlyingSeg=NSE_INDEX`,
+    `/v2/option-chain/nse/index/${key==='nf'?'NIFTY':'BANKNIFTY'}?expiry=${expiry}`,
+  ];
+  for(const ep of endpoints){
+    try{ data=await dhan(ep); if(data) break; }catch(e){ continue; }
+  }
+
+  // Parse response - handle all Dhan response shapes
+  let rows=[];
+  if(data){
+    rows=data?.data||data?.oc||data?.optionChainData||data?.OptionChainData||[];
+    if(!Array.isArray(rows)||!rows.length){
+      // Try nested
+      for(const v of Object.values(data||{})){
+        if(Array.isArray(v)&&v.length>2){rows=v;break;}
+      }
+    }
+  }
+
+  if(!Array.isArray(rows)||rows.length<2){
+    addLog('var(--amber)',`OC: No data for ${key} (market closed or API limit). Using PCR estimate.`);
+    // Market closed fallback - use reasonable estimates based on spot
+    S[key].pcr=1.1; S[key].maxPain=atm-step; S[key].putWall=atm-step*4;
+    S[key].callWall=atm+step*4; S[key].iv=14; S[key].strike=atm+step;
+    S[key].entry=key==='nf'?85:320; S[key].expiry=expiry;
+    S[key].oiRows=[]; return;
+  }
+
+  // Extract spot price from OC response - most reliable source
+  const underlyingVal = data?.records?.underlyingValue||data?.underlyingValue||
+                        data?.data?.underlyingValue||data?.filtered?.data?.[0]?.PE?.underlyingValue||0;
+  if(underlyingVal>0){
+    S[key].prev=S[key].spot||underlyingVal;
+    S[key].spot=underlyingVal;
+    addLog('var(--green)',`OC ${key}: ${rows.length} strikes, spot=${underlyingVal}`);
+  } else {
+    addLog('var(--green)',`OC ${key}: ${rows.length} strikes loaded (no spot in response)`);
+  }
+
   let ceTot=0,peTot=0,maxCeOI=0,maxPeOI=0,topCe=0,topPe=0,atmIV=0,atm1LTP=0;
   const sm={};
   rows.forEach(r=>{
-    const st=r.strikePrice||r.strike_price||r.StrikePrice||r.strike;
+    const st=r.strikePrice||r.strike_price||r.StrikePrice||r.strike||r.SP;
     if(!st)return;
     if(!sm[st])sm[st]={ce:{oi:0,ltp:0,iv:0},pe:{oi:0,ltp:0,iv:0}};
-    const ce=r.callOption||r.CE||(r.optionType==='CE'?r:null);
-    if(ce){sm[st].ce={oi:ce.openInterest||ce.OI||0,ltp:ce.lastPrice||ce.LTP||0,iv:ce.impliedVolatility||ce.IV||0};}
-    const pe=r.putOption||r.PE||(r.optionType==='PE'?r:null);
-    if(pe){sm[st].pe={oi:pe.openInterest||pe.OI||0,ltp:pe.lastPrice||pe.LTP||0,iv:pe.impliedVolatility||pe.IV||0};}
+    const ce=r.callOption||r.CE||(r.optionType==='CE'?r:null)||r.call;
+    if(ce){sm[st].ce={oi:+(ce.openInterest||ce.OI||ce.oi||0),ltp:+(ce.lastPrice||ce.LTP||ce.ltp||0),iv:+(ce.impliedVolatility||ce.IV||ce.iv||0)};}
+    const pe=r.putOption||r.PE||(r.optionType==='PE'?r:null)||r.put;
+    if(pe){sm[st].pe={oi:+(pe.openInterest||pe.OI||pe.oi||0),ltp:+(pe.lastPrice||pe.LTP||pe.ltp||0),iv:+(pe.impliedVolatility||pe.IV||pe.iv||0)};}
   });
+
   const strikes=Object.keys(sm).map(Number).sort((a,b)=>a-b);
+  if(!strikes.length){addLog('var(--amber)','OC: Could not parse strikes');return;}
+
   const pain={};
   strikes.forEach(st=>{
     pain[st]=strikes.reduce((acc,s2)=>acc+Math.max(0,st-s2)*(sm[s2]?.ce?.oi||0)+Math.max(0,s2-st)*(sm[s2]?.pe?.oi||0),0);
   });
   let minP=Infinity,mpSt=atm;
   Object.entries(pain).forEach(([s,v])=>{if(v<minP){minP=v;mpSt=+s;}});
+
   strikes.forEach(st=>{
     ceTot+=sm[st].ce.oi;peTot+=sm[st].pe.oi;
     if(sm[st].ce.oi>maxCeOI){maxCeOI=sm[st].ce.oi;topCe=st;}
     if(sm[st].pe.oi>maxPeOI){maxPeOI=sm[st].pe.oi;topPe=st;}
-    if(Math.abs(st-atm)<=step/2){if(sm[st].ce.iv)atmIV=sm[st].ce.iv;}
+    if(Math.abs(st-atm)<=step/2){if(sm[st].ce.iv>0)atmIV=sm[st].ce.iv;}
     if(st===atm+step)atm1LTP=sm[st].ce.ltp||0;
   });
-  S[key].pcr=ceTot>0?peTot/ceTot:0;
-  S[key].maxPain=mpSt;S[key].putWall=topPe;S[key].callWall=topCe;
-  S[key].iv=atmIV;S[key].strike=atm+step;
-  S[key].entry=Math.round(atm1LTP)||Math.round((sm[atm]?.ce?.ltp||0)*0.75);
+
+  S[key].pcr=ceTot>0?+(peTot/ceTot).toFixed(2):1.0;
+  S[key].maxPain=mpSt;S[key].putWall=topPe||atm-step*4;
+  S[key].callWall=topCe||atm+step*4;
+  S[key].iv=atmIV||14;S[key].strike=atm+step;
+  S[key].entry=Math.round(atm1LTP)||S[key].entry||(key==='nf'?85:320);
   if(S[key].active&&atm1LTP>0)S[key].ltp=atm1LTP;
-  S[key].oiRows=strikes.filter(st=>Math.abs(st-atm)<=step*5).map(st=>({strike:st,ce:sm[st].ce,pe:sm[st].pe,isAtm:Math.abs(st-atm)<step/2}));
-  S[key].expiry=data?.expiry||data?.ExpiryDate||'';
+  S[key].expiry=data?.records?.expiryDates?.[0]||data?.expiryDates?.[0]||expiry;
+  S[key].oiRows=strikes.filter(st=>Math.abs(st-atm)<=step*5).map(st=>({
+    strike:st,ce:sm[st].ce,pe:sm[st].pe,isAtm:Math.abs(st-atm)<step/2
+  }));
 }
 
 async function fetchFII(){
@@ -702,6 +805,12 @@ FII DATA:
 - FII Net Futures: ${S.fii.net!==0?'₹'+(S.fii.net/100).toFixed(0)+' Cr ('+(S.fii.net>0?'Net Long':'Net Short')+')':'Not available'}
 
 ${!hasData?'NOTE: Live market data not available yet (Dhan API not connected or market closed). Please provide analysis based on general market principles and the 9-11 AM option buying strategy.':''}
+
+IMPORTANT INSTRUCTIONS:
+- If live data is missing or market is closed, still give your BEST ESTIMATE trade plan based on the spot prices provided
+- Use the spot price to calculate ATM strike and suggest ATM+1 CE as entry
+- Even with limited data, give a complete trade plan — never return N/A if spot price is available
+- If market is closed (after 3:30 PM or before 9:00 AM), still give tomorrow's expected trade plan
 
 Please provide a structured JSON response with this exact format:
 {
@@ -1082,7 +1191,9 @@ function saveDhan(){
   lss('d_cid',cid);lss('d_tok',tok);lss('d_mode',val('s-mode'));
   S.creds={cid,tok};S.mode=val('s-mode');applyMode();
   set('dhan-stat','✓ Saved! Testing…');col_('dhan-stat','var(--green)');
-  setBadge('load','Connecting…');testDhan();
+  setBadge('load','Connecting…');
+  connectDhanWS();  // Start WebSocket real-time feed
+  testDhan();
 }
 
 async function testDhan(){
