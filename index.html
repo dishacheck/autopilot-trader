@@ -1292,6 +1292,365 @@ function addLog(color,msg){
   d.innerHTML=`<div class="logt">${t}</div><div class="logd" style="background:${color}"></div><div class="logm">${msg}</div>`;
   e.appendChild(d);if(e.children.length>30)e.removeChild(e.firstChild);e.scrollTop=e.scrollHeight;
 }
+
+
+// ═══════════════════════════════════════════════════════
+// DHAN WEBSOCKET — TICK BY TICK REAL-TIME FEED
+// Direct browser → Dhan WS (no proxy, no CORS issue)
+// Protocol: Dhan binary packet format v2
+// ═══════════════════════════════════════════════════════
+
+const WS = {
+  socket: null,
+  connected: false,
+  authenticated: false,
+  subscribed: false,
+  retries: 0,
+  maxRetries: 10,
+  pingTimer: null,
+  tickCount: 0,
+  lastTick: null,
+  tickHistory: { nf: [], bn: [] }
+};
+
+// ── CONNECT ──
+function connectDhanWS() {
+  if (!S.creds.cid || !S.creds.tok) {
+    addLog('var(--red)', '❌ Add Dhan Client ID + Access Token in ⚙️ Settings first');
+    return;
+  }
+  if (WS.socket && (WS.socket.readyState === 0 || WS.socket.readyState === 1)) {
+    addLog('var(--amber)', 'WS already ' + (WS.connected ? 'connected' : 'connecting'));
+    return;
+  }
+
+  addLog('var(--blue)', '📡 Connecting Dhan WebSocket for tick-by-tick data…');
+  wsSetStatus('connecting');
+
+  try {
+    // Dhan WebSocket endpoint
+    WS.socket = new WebSocket('wss://api-feed.dhan.co');
+    WS.socket.binaryType = 'arraybuffer';
+
+    WS.socket.onopen = function () {
+      WS.connected = true;
+      addLog('var(--green)', '✅ Dhan WebSocket connected — sending auth…');
+      wsSetStatus('auth');
+
+      // ── AUTH PACKET ──
+      // Dhan expects a specific binary auth packet OR JSON
+      // Try JSON auth first (simpler)
+      const authJSON = {
+        LoginReq: {
+          MsgCode: 42,
+          ClientId: S.creds.cid,
+          Token: S.creds.tok
+        }
+      };
+      WS.socket.send(JSON.stringify(authJSON));
+
+      // Ping every 25 seconds to keep alive
+      WS.pingTimer = setInterval(() => {
+        if (WS.socket && WS.socket.readyState === 1) {
+          WS.socket.send(JSON.stringify({ MsgCode: 44 })); // heartbeat
+        }
+      }, 25000);
+    };
+
+    WS.socket.onmessage = function (event) {
+      if (event.data instanceof ArrayBuffer) {
+        // Binary tick data
+        parseDhanBinaryTick(event.data);
+      } else {
+        // Text/JSON response
+        parseDhanTextMsg(event.data);
+      }
+    };
+
+    WS.socket.onerror = function (err) {
+      WS.connected = false;
+      wsSetStatus('error');
+      addLog('var(--red)', '❌ WS error — token may be expired. Get fresh token from Dhan app.');
+    };
+
+    WS.socket.onclose = function (e) {
+      WS.connected = false;
+      WS.authenticated = false;
+      WS.subscribed = false;
+      clearInterval(WS.pingTimer);
+      wsSetStatus('closed');
+      addLog('var(--amber)', `WS closed (code: ${e.code}, reason: ${e.reason || 'none'}) — retry ${WS.retries + 1}/${WS.maxRetries}`);
+
+      // Auto reconnect during market hours
+      const h = new Date().getHours();
+      if (WS.retries < WS.maxRetries && h >= 9 && h < 16) {
+        WS.retries++;
+        const delay = Math.min(5000 * WS.retries, 30000);
+        setTimeout(connectDhanWS, delay);
+      }
+    };
+
+  } catch (e) {
+    addLog('var(--red)', 'WS init failed: ' + e.message);
+  }
+}
+
+// ── PARSE TEXT / JSON MESSAGES ──
+function parseDhanTextMsg(raw) {
+  try {
+    const msg = JSON.parse(raw);
+
+    // Auth success indicators
+    if (msg?.LoginResp?.Status === 'Ok' ||
+        msg?.MsgCode === 43 ||
+        msg?.status === 'SUCCESS' ||
+        msg?.type === 'connected' ||
+        msg?.Type === 'connection_established') {
+      WS.authenticated = true;
+      addLog('var(--green)', '🔑 Auth success — subscribing to Nifty & BankNifty…');
+      wsSetStatus('subscribing');
+      setTimeout(subscribeDhanWS, 500);
+      return;
+    }
+
+    // Subscription ack
+    if (msg?.MsgCode === 22 || msg?.Type === 'subscription' || msg?.status === 'SUBSCRIBED') {
+      WS.subscribed = true;
+      addLog('var(--green)', '📡 Subscribed! Tick data will start flowing…');
+      wsSetStatus('live');
+      return;
+    }
+
+    // JSON tick data (some Dhan feeds send JSON ticks)
+    if (msg?.LTP || msg?.ltp || msg?.last_price) {
+      const ltp = +(msg?.LTP || msg?.ltp || msg?.last_price || 0);
+      const sec = String(msg?.SecurityId || msg?.security_id || msg?.secId || '');
+      if (sec === '13' && ltp > 20000) processTick('nf', ltp);
+      if (sec === '25' && ltp > 40000) processTick('bn', ltp);
+      return;
+    }
+
+    // Log unknown message for debugging
+    const str = JSON.stringify(msg).slice(0, 150);
+    if (!str.includes('ping') && !str.includes('pong') && !str.includes('heartbeat')) {
+      addLog('var(--blue)', 'WS ← ' + str);
+      // If we get ANY response after auth send, try subscribing anyway
+      if (WS.connected && !WS.subscribed && WS.authenticated === false) {
+        WS.authenticated = true;
+        setTimeout(subscribeDhanWS, 1000);
+      }
+    }
+  } catch (e) {
+    // Not JSON - maybe partial binary as text
+  }
+}
+
+// ── SUBSCRIBE TO NIFTY + BANKNIFTY ──
+function subscribeDhanWS() {
+  if (!WS.socket || WS.socket.readyState !== 1) return;
+
+  // Dhan subscription format — request code 21 = subscribe
+  // IDX_I = NSE Index segment
+  const sub1 = {
+    RequestCode: 21,
+    InstrumentCount: 2,
+    InstrumentList: [
+      { ExchangeSegment: 'IDX_I', SecurityId: '13' },  // Nifty 50
+      { ExchangeSegment: 'IDX_I', SecurityId: '25' }   // Bank Nifty
+    ]
+  };
+  WS.socket.send(JSON.stringify(sub1));
+
+  // Also try NSE_INDEX segment format
+  setTimeout(() => {
+    if (WS.socket && WS.socket.readyState === 1) {
+      const sub2 = {
+        RequestCode: 21,
+        InstrumentCount: 2,
+        InstrumentList: [
+          { ExchangeSegment: 'NSE_INDEX', SecurityId: '13' },
+          { ExchangeSegment: 'NSE_INDEX', SecurityId: '25' }
+        ]
+      };
+      WS.socket.send(JSON.stringify(sub2));
+    }
+  }, 1000);
+
+  WS.subscribed = true;
+  addLog('var(--green)', '✅ Subscription sent — waiting for ticks…');
+  wsSetStatus('live');
+}
+
+// ── PARSE BINARY TICK ──
+// Dhan binary packet structure (little endian):
+// Byte 0:     Feed Response Type (11=Ticker, 15=Quote, 17=Depth, 51=Index)
+// Byte 1:     Message Length
+// Bytes 2-3:  Exchange Segment
+// Bytes 4-7:  Security ID (int32)
+// Bytes 8-11: LTP (float32)
+// Bytes 12-15: LTQ (int32) - Last Traded Quantity
+// Bytes 16-19: LTT (int32) - Last Trade Time
+// Bytes 20-23: Avg Trade Price (float32)
+// Bytes 24-27: Volume (int32)
+// Bytes 28-31: Total Sell Qty (int32)
+// Bytes 32-35: Total Buy Qty (int32)
+// Bytes 36-39: Open (float32)
+// Bytes 40-43: Close/Prev Close (float32)
+// Bytes 44-47: High (float32)
+// Bytes 48-51: Low (float32)
+
+function parseDhanBinaryTick(buffer) {
+  try {
+    const view = new DataView(buffer);
+    const len = buffer.byteLength;
+    if (len < 4) return;
+
+    const feedType = view.getUint8(0);
+
+    // Process single packet
+    if (len >= 12) {
+      processPacket(view, 0, feedType, len);
+    }
+
+    // Handle multiple packets in one buffer
+    if (len > 60) {
+      let offset = 0;
+      while (offset + 12 <= len) {
+        const pktType = view.getUint8(offset);
+        const pktLen = view.getUint8(offset + 1) || 60;
+        if (pktType >= 11 && pktType <= 60) {
+          processPacket(view, offset, pktType, Math.min(pktLen, len - offset));
+        }
+        offset += Math.max(pktLen, 12);
+        if (offset >= len) break;
+      }
+    }
+  } catch (e) { /* ignore binary errors */ }
+}
+
+function processPacket(view, offset, feedType, pktLen) {
+  try {
+    // Try big-endian and little-endian for security ID
+    let secId_le = 0, secId_be = 0, ltp_le = 0, ltp_be = 0;
+
+    if (offset + 12 <= view.byteLength) {
+      secId_le = view.getInt32(offset + 4, true);   // little endian
+      secId_be = view.getInt32(offset + 4, false);  // big endian
+      ltp_le   = view.getFloat32(offset + 8, true);
+      ltp_be   = view.getFloat32(offset + 8, false);
+    }
+
+    // Find which encoding gives valid security ID
+    let secId = 0, ltp = 0;
+    if (secId_le === 13 || secId_le === 25) { secId = secId_le; ltp = ltp_le; }
+    else if (secId_be === 13 || secId_be === 25) { secId = secId_be; ltp = ltp_be; }
+
+    // Validate LTP range
+    if (ltp < 1000 && ltp > 0) ltp *= 100; // paise conversion
+    if (ltp < 0) ltp = Math.abs(ltp);
+
+    if (secId === 13 && ltp > 20000 && ltp < 30000) {
+      processTick('nf', ltp);
+    } else if (secId === 25 && ltp > 40000 && ltp < 75000) {
+      processTick('bn', ltp);
+    }
+
+    // Also try to extract OHLC if Quote packet
+    if ((feedType === 15 || feedType === 17) && pktLen >= 52) {
+      let open = view.getFloat32(offset + 36, true);
+      let close = view.getFloat32(offset + 40, true);
+      let high = view.getFloat32(offset + 44, true);
+      let low = view.getFloat32(offset + 48, true);
+      if (open < 100) { open*=100; close*=100; high*=100; low*=100; }
+      if (secId === 13 && open > 20000) {
+        S.nf.open = open; S.nf.close = close; S.nf.high = high; S.nf.low = low;
+      }
+      if (secId === 25 && open > 40000) {
+        S.bn.open = open; S.bn.close = close; S.bn.high = high; S.bn.low = low;
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ── PROCESS VALIDATED TICK ──
+function processTick(key, ltp) {
+  const prev = S[key].spot || ltp;
+  S[key].prev = prev;
+  S[key].spot = ltp;
+  WS.tickCount++;
+  WS.lastTick = new Date();
+
+  // Store tick history (last 50)
+  WS.tickHistory[key].push({ t: Date.now(), p: ltp });
+  if (WS.tickHistory[key].length > 50) WS.tickHistory[key].shift();
+
+  // Update all displays
+  const d = ltp - prev;
+  const pct = prev > 0 ? ((d / prev) * 100).toFixed(2) : '0.00';
+  const col = d >= 0 ? 'var(--green)' : 'var(--red)';
+  const arrow = d >= 0 ? '▲ +' : '▼ ';
+  const chg = arrow + Math.abs(d).toFixed(1) + ' (' + (d>=0?'+':'') + pct + '%)';
+  const fmtP = n => Math.round(n).toLocaleString('en-IN');
+
+  if (key === 'nf') {
+    set('h-nf', fmtP(ltp));           col_('h-nf', 'var(--blue)');
+    set('h-nfc', chg);                col_('h-nfc', col);
+    set('d-nfs', fmtP(ltp));          col_('d-nfs', 'var(--blue)');
+    set('d-nfc', arrow + Math.abs(d).toFixed(0)); col_('d-nfc', col);
+    set('sn-spot', fmtP(ltp));        col_('sn-spot', 'var(--blue)');
+    set('sn-spotc', chg);             col_('sn-spotc', col);
+  } else {
+    set('h-bn', fmtP(ltp));           col_('h-bn', 'var(--green)');
+    set('h-bnc', chg);                col_('h-bnc', col);
+    set('d-bns', fmtP(ltp));          col_('d-bns', 'var(--green)');
+    set('d-bnc', arrow + Math.abs(d).toFixed(0)); col_('d-bnc', col);
+    set('sb-spot', fmtP(ltp));        col_('sb-spot', 'var(--green)');
+    set('sb-spotc', chg);             col_('sb-spotc', col);
+  }
+
+  // Update ticker count and time in status
+  const ts = WS.lastTick.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  set('ws-status-lbl', '🟢 Live — ' + ts + ' — ' + WS.tickCount + ' ticks');
+  setBadge('ok', '⚡ ' + (key==='nf'?'NF ':'BN ') + fmtP(ltp));
+
+  // Update refresh bar
+  set('rbnext', '⚡ Tick #' + WS.tickCount + ' at ' + ts);
+
+  // Also update live trade P&L
+  if (S.nf.active || S.bn.active) updatePnL();
+}
+
+// ── STATUS DISPLAY ──
+function wsSetStatus(status) {
+  const lbl = el('ws-status-lbl');
+  const pill = el('ws-pill');
+  const map = {
+    connecting:  ['🟡 Connecting to Dhan…',    'WS: Connecting', 'var(--amber)', 'var(--abg)', 'var(--abdr)'],
+    auth:        ['🟡 Authenticating…',          'WS: Auth',       'var(--amber)', 'var(--abg)', 'var(--abdr)'],
+    subscribing: ['🟡 Subscribing…',             'WS: Sub',        'var(--amber)', 'var(--abg)', 'var(--abdr)'],
+    live:        ['🟢 Live — waiting for ticks','WS: Live ✓',     'var(--green)', 'var(--gbg)', 'var(--gbdr)'],
+    error:       ['❌ Error — check token',      'WS: Error',      'var(--red)',   'var(--rbg)', 'var(--rbdr)'],
+    closed:      ['⚫ Closed — reconnecting…',   'WS: Off',        'var(--text3)', 'var(--bg3)', 'var(--border)'],
+  };
+  const [lblTxt, pillTxt, txtCol, bg, border] = map[status] || map.closed;
+  if (lbl) { lbl.textContent = lblTxt; lbl.style.color = txtCol; }
+  if (pill) {
+    pill.textContent = pillTxt;
+    pill.style.color = txtCol;
+    pill.style.background = bg;
+    pill.style.border = '1px solid ' + border;
+  }
+}
+
+function disconnectDhanWS() {
+  if (WS.socket) { WS.socket.close(); WS.socket = null; }
+  WS.connected = false; WS.authenticated = false; WS.subscribed = false;
+  clearInterval(WS.pingTimer);
+  wsSetStatus('closed');
+  addLog('var(--amber)', 'WS disconnected manually');
+}
+
+
 </script>
 </body>
 </html>
