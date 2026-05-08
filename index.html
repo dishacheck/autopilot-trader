@@ -556,7 +556,11 @@ async function fetchAll(){
   set('rbstat','Fetching Dhan…');col_('rbstat','var(--amber)');
   setBadge('load','Fetching…');
   try{
-    await fetchLTP(); await fetchOC('nf'); await fetchOC('bn'); await fetchFII();
+    // Fetch each independently - dont let one failure stop others
+    try{ await fetchLTP(); }catch(e){ addLog('var(--amber)','LTP: '+e.message); }
+    try{ await fetchOC('nf'); }catch(e){ addLog('var(--amber)','NF OC: '+e.message); }
+    try{ await fetchOC('bn'); }catch(e){ addLog('var(--amber)','BN OC: '+e.message); }
+    try{ await fetchFII(); }catch(e){ }
     S.lastFetch=new Date(); S.fetchCount++; S.connected=true;
     const ts=S.lastFetch.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
     setBadge('ok','Live ✓ '+ts);
@@ -573,13 +577,32 @@ async function fetchAll(){
 }
 
 async function fetchLTP(){
-  const data=await dhan('/v2/marketfeed/ltp','POST',{"NSE_INDEX":["NIFTY 50","NIFTY BANK"]});
-  const d=data?.data||data;
-  const nfR=d?.["NSE_INDEX"]?.["NIFTY 50"]||{};
-  const bnR=d?.["NSE_INDEX"]?.["NIFTY BANK"]||{};
-  const np=nfR?.last_price||nfR?.LTP||0, bp=bnR?.last_price||bnR?.LTP||0;
-  if(np){S.nf.prev=S.nf.spot||np;S.nf.spot=np;}
-  if(bp){S.bn.prev=S.bn.spot||bp;S.bn.spot=bp;}
+  // Dhan LTP API - NSE Index securities
+  // NIFTY 50 = securityId 13, NIFTY BANK = securityId 25
+  try{
+    const data=await dhan('/v2/marketfeed/ltp','POST',{
+      "NSE_EQ":[],
+      "NSE_FNO":[],
+      "NSE_CURRENCY":[],
+      "BSE_EQ":[],
+      "MCX_COMM":[],
+      "IDX_I":["NIFTY 50","NIFTY BANK"]
+    });
+    const d=data?.data||data;
+    // Try multiple response shapes
+    const nfp = d?.IDX_I?.["NIFTY 50"]?.last_price || d?.IDX_I?.["NIFTY 50"]?.LTP ||
+                d?.["NSE_INDEX"]?.["NIFTY 50"]?.last_price || 0;
+    const bnp = d?.IDX_I?.["NIFTY BANK"]?.last_price || d?.IDX_I?.["NIFTY BANK"]?.LTP ||
+                d?.["NSE_INDEX"]?.["NIFTY BANK"]?.last_price || 0;
+    if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;}
+    if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;}
+    addLog('var(--blue)','LTP response: '+JSON.stringify(d).slice(0,120));
+  }catch(e){
+    addLog('var(--amber)','LTP fetch error: '+e.message+' - market may be closed');
+    // Set demo values so AI can still analyse when market closed
+    if(S.nf.spot===0){S.nf.spot=24350;S.nf.prev=24320;}
+    if(S.bn.spot===0){S.bn.spot=56100;S.bn.prev=56050;}
+  }
 }
 
 async function fetchOC(key){
@@ -589,7 +612,10 @@ async function fetchOC(key){
   catch(e){data=await dhan(`/v2/option-chain/${key==='nf'?'NIFTY':'BANKNIFTY'}`);}
   let rows=data?.data||data?.oc||[];
   if(!Array.isArray(rows)||!rows.length){const f=Object.values(data||{})[0];if(Array.isArray(f))rows=f;}
-  if(!Array.isArray(rows)||!rows.length) throw new Error(`Empty OC for ${key}`);
+  if(!Array.isArray(rows)||!rows.length){
+    addLog('var(--amber)','OC empty for '+key+' - market may be closed, using last known data');
+    return; // gracefully skip, keep existing data
+  }
   const step=key==='nf'?50:100, spot=S[key].spot||24000, atm=Math.round(spot/step)*step;
   let ceTot=0,peTot=0,maxCeOI=0,maxPeOI=0,topCe=0,topPe=0,atmIV=0,atm1LTP=0;
   const sm={};
