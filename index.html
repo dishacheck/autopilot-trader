@@ -1354,17 +1354,21 @@ function connectDhanWS(){
   addLog('var(--blue)','📡 Connecting to Dhan WebSocket feed…');
   wsStatus('connecting');
   try{
-    WS.socket = new WebSocket('wss://api-feed.dhan.co');
+    const wsURL='wss://api-feed.dhan.co?version=2&token='+encodeURIComponent(S.creds.tok)+'&clientId='+encodeURIComponent(S.creds.cid)+'&authType=2';
+    addLog('var(--blue)','WS connecting with URL auth: ...token=***'+S.creds.tok.slice(-6));
+    WS.socket = new WebSocket(wsURL);
     WS.socket.binaryType = 'arraybuffer';
 
     WS.socket.onopen = function(){
       WS.connected=true; WS.retries=0;
-      addLog('var(--green)','✅ Connected to Dhan WS — sending binary auth…');
-      wsStatus('auth');
+      addLog('var(--green)','✅ Dhan WS connected via URL auth! Now subscribing…');
+      wsStatus('subscribing');
+      setTimeout(subscribeDhanWS,300);
       // Send BINARY auth packet (not JSON)
       const authBuf = buildAuthPacket(S.creds.cid, S.creds.tok);
       WS.socket.send(authBuf);
-      addLog('var(--blue)','🔑 Binary auth packet sent ('+authBuf.byteLength+' bytes)');
+      const authBytes = Array.from(new Uint8Array(authBuf.slice(0,Math.min(15,authBuf.byteLength))));
+  addLog('var(--blue)','🔑 Auth sent ('+authBuf.byteLength+' bytes): '+authBytes.join(','));
       // Keepalive ping every 25s
       WS.pingTimer = setInterval(()=>{
         if(WS.socket&&WS.socket.readyState===1){
@@ -1409,7 +1413,14 @@ function handleBinaryMsg(buf){
   const view = new DataView(buf);
   if(buf.byteLength<1)return;
   const code = view.getUint8(0);
-  addLog('var(--blue)','📦 Binary msg: code='+code+' len='+buf.byteLength+' bytes='+Array.from(new Uint8Array(buf.slice(0,6))).join(','));
+  // Show ALL bytes for debugging - critical to see what Dhan sends
+  const allBytes = Array.from(new Uint8Array(buf.slice(0,Math.min(32,buf.byteLength))));
+  addLog('var(--blue)','📦 BIN code='+code+' len='+buf.byteLength+' | '+allBytes.join(','));
+  // Try to decode as text too
+  try{
+    const txt = new TextDecoder().decode(buf.slice(0,Math.min(50,buf.byteLength)));
+    if(txt && txt.trim()) addLog('var(--blue)','📝 as text: '+txt.replace(/[^\x20-\x7E]/g,'?').slice(0,80));
+  }catch(_){}
 
   // Code 11 response = auth success  
   if(code===11||code===12){
@@ -1480,7 +1491,8 @@ function subscribeDhanWS(){
     {exchCode:0, secId:'25'},   // BankNifty on IDX_I
   ]);
   WS.socket.send(subBuf);
-  addLog('var(--green)','📡 Binary subscribe sent ('+subBuf.byteLength+' bytes) — Nifty+BankNifty');
+  const subBytes = Array.from(new Uint8Array(subBuf.slice(0,Math.min(15,subBuf.byteLength))));
+  addLog('var(--green)','📡 Subscribe sent ('+subBuf.byteLength+' bytes): '+subBytes.join(','));
 
   // Also try NSE_INDEX segment (code 13) as fallback
   setTimeout(()=>{
