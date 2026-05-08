@@ -1,57 +1,34 @@
-// api/dhan.js — Vercel serverless function
-// This runs on Vercel's SERVER, not the browser
-// So CORS is not an issue — server can call any API freely
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-client-id, x-access-token');
 
-export const config = { runtime: 'edge' };
-
-export default async function handler(req) {
-  // Allow all origins
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, access-token, client-id',
-  };
-
-  // Handle preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return res.status(200).end();
   }
 
+  const clientId = req.headers['x-client-id'] || '';
+  const accessToken = req.headers['x-access-token'] || '';
+
+  if (!clientId || !accessToken) {
+    return res.status(401).json({ error: 'Missing credentials' });
+  }
+
+  const endpoint = req.query.endpoint || '';
+  if (!endpoint) {
+    return res.status(400).json({ error: 'Missing endpoint' });
+  }
+
+  const dhanURL = 'https://api.dhan.co' + endpoint;
+
   try {
-    const url = new URL(req.url);
-    
-    // Get credentials from request headers
-    const clientId   = req.headers.get('x-client-id') || '';
-    const accessToken = req.headers.get('x-access-token') || '';
-
-    if (!clientId || !accessToken) {
-      return new Response(JSON.stringify({ error: 'Missing credentials' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Get the Dhan endpoint path from query param
-    const endpoint = url.searchParams.get('endpoint') || '';
-    if (!endpoint) {
-      return new Response(JSON.stringify({ error: 'Missing endpoint param' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    const dhanURL = 'https://api.dhan.co' + endpoint;
-    const method  = req.method === 'POST' ? 'POST' : 'GET';
-
-    // Read body if POST
     let body = null;
-    if (method === 'POST') {
-      try { body = await req.text(); } catch(e) {}
+    if (req.method === 'POST') {
+      body = JSON.stringify(req.body);
     }
 
-    // Call Dhan API from server side (no CORS issue)
     const dhanRes = await fetch(dhanURL, {
-      method,
+      method: req.method,
       headers: {
         'Content-Type': 'application/json',
         'access-token': accessToken,
@@ -61,21 +38,12 @@ export default async function handler(req) {
       ...(body ? { body } : {})
     });
 
-    const data = await dhanRes.text();
-
-    return new Response(data, {
-      status: dhanRes.status,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      }
-    });
+    const text = await dhanRes.text();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(dhanRes.status).send(text);
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return res.status(500).json({ error: err.message });
   }
 }
