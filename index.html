@@ -219,7 +219,7 @@ input:focus,select:focus{border-color:var(--blue)}
       <span>9:00 AM</span><span id="winpct" style="color:var(--green);font-weight:700">0%</span><span id="winlbl" style="color:var(--green);font-weight:700">Window OPEN</span><span>11:00 AM</span>
     </div>
     <div class="wintr"><div class="winf" id="winf" style="width:0%;background:var(--green)"></div></div>
-    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px"><span>Best: 9:15–9:45</span><span style="color:var(--amber)">Caution: 10:30+</span><span style="color:var(--red)">Exit only: 10:45+</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px"><span style="color:var(--green)">Testing mode — all hours active</span><span style="color:var(--blue)">AI works anytime</span><span style="color:var(--green)">No time restriction</span></div>
   </div>
 
   <div class="g5">
@@ -528,9 +528,9 @@ function tick(){
   for(const[c,l,co]of states){if(c){set('winlbl',l);col_('winlbl',co);if(wf)wf.style.background=co;break;}}
   // Hard exit
   const[eh,em]=(val('s-exit')||'11:00').split(':').map(Number);
-  if(h===eh&&m>=em&&m<em+2&&(S.nf.active||S.bn.active)){exitAll();addLog('var(--red)','⏰ HARD EXIT 11:00 AM');}
+  // Hard exit disabled for testing
   // Auto AI at 9:15
-  if(h===9&&m===15&&s<5&&!S.aiAutoFired&&S.toggles.auto&&S.anthropicKey){
+  if(false){ // auto-fire disabled for testing mode
     S.aiAutoFired=true;
     addLog('var(--purple)','🤖 9:15 AM — Auto-triggering Claude AI analysis…');
     setTimeout(()=>runAI(),2000);
@@ -849,12 +849,12 @@ function renderAIError(msg){
 function applyAIToTrades(analysis){
   const minP=parseInt(val('s-minp'))||70;
   const n=new Date(),h=n.getHours(),m=n.getMinutes();
-  const inWindow=(h===9&&m>=15)||(h===10&&m<45);
+  const inWindow=true; // Testing mode - no time restriction
   ['nf','bn'].forEach(key=>{
     const a=key==='nf'?analysis.nifty:analysis.banknifty;
     if(!a||a.signal==='AVOID') return;
     const prob=a.probability||0;
-    if(prob>=minP&&inWindow&&!S[key].active&&S[key].entry>0){
+    if(prob>=minP&&!S[key].active&&S[key].entry>0){
       S[key].active=true;
       const entry=S[key].entry;
       const slPct=parseInt(val('s-slp'))||30, t1Pct=parseInt(val('s-t1p'))||40, t2Pct=parseInt(val('s-t2p'))||80;
