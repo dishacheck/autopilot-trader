@@ -214,6 +214,7 @@ input:focus,select:focus{border-color:var(--blue)}
     <div style="display:flex;gap:6px">
       <button class="rbarbtn" onclick="connectDhanWS()">📡 WS Live</button>
       <button class="rbarbtn" onclick="fetchAll()">↻ OC Data</button>
+      <button class="rbarbtn" onclick="diagWS()" style="background:var(--pbg);color:var(--purple);border-color:var(--pbdr)">🔍 WS Diag</button>
     </div>
   </div>
 
@@ -634,54 +635,43 @@ async function fetchAll(){
 }
 
 async function fetchLTP(){
-  // Dhan supports multiple LTP formats - try all
   let fetched=false;
 
-  // Format 1: IDX_I (index format)
+  // Dhan correct format for index LTP — segment key must be "NSE_INDEX" (not IDX_I, not NSE_EQ)
   try{
-    const d1=await dhan('/v2/marketfeed/ltp','POST',{"IDX_I":["NIFTY 50","NIFTY BANK"]});
-    const r=d1?.data||d1;
-    const nfp=r?.IDX_I?.['NIFTY 50']?.last_price||r?.IDX_I?.['NIFTY 50']?.LTP||0;
-    const bnp=r?.IDX_I?.['NIFTY BANK']?.last_price||r?.IDX_I?.['NIFTY BANK']?.LTP||0;
-    addLog('var(--blue)','LTP IDX_I: NF='+nfp+' BN='+bnp);
+    const body={"NSE_INDEX":["NIFTY 50","NIFTY BANK"]};
+    const d=await dhan('/v2/marketfeed/ltp','POST',body);
+    addLog('var(--blue)','LTP raw: '+JSON.stringify(d).slice(0,200));
+    const r=d?.data||d;
+    const nfp=+(r?.NSE_INDEX?.['NIFTY 50']?.last_price||r?.NSE_INDEX?.['NIFTY 50']?.LTP||0);
+    const bnp=+(r?.NSE_INDEX?.['NIFTY BANK']?.last_price||r?.NSE_INDEX?.['NIFTY BANK']?.LTP||0);
+    addLog('var(--blue)','LTP NSE_INDEX: NF='+nfp+' BN='+bnp);
     if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;fetched=true;}
     if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;fetched=true;}
-  }catch(e1){addLog('var(--amber)','LTP IDX_I failed: '+e1.message);}
+  }catch(e1){
+    addLog('var(--amber)','LTP NSE_INDEX failed: '+e1.message);
+    // 429 = rate limited — back off, don't hammer
+    if(e1.message.includes('429')){
+      addLog('var(--amber)','Rate limited by Dhan — using last known values, slowing refresh');
+      S.nextIn=300; // slow down to 5 min
+    }
+  }
 
-  // Format 2: NSE_EQ with security IDs (13=NIFTY, 25=BANKNIFTY)
+  // Fallback: try IDX_I format
   if(!fetched){
     try{
-      const d2=await dhan('/v2/marketfeed/ltp','POST',{"NSE_EQ":["13","25"]});
+      const d2=await dhan('/v2/marketfeed/ltp','POST',{"IDX_I":["13","25"]});
       const r=d2?.data||d2;
-      const nfp=r?.NSE_EQ?.['13']?.last_price||r?.NSE_EQ?.['13']?.LTP||0;
-      const bnp=r?.NSE_EQ?.['25']?.last_price||r?.NSE_EQ?.['25']?.LTP||0;
-      addLog('var(--blue)','LTP NSE_EQ: NF='+nfp+' BN='+bnp);
+      const nfp=+(r?.IDX_I?.['13']?.last_price||r?.IDX_I?.['13']?.LTP||0);
+      const bnp=+(r?.IDX_I?.['25']?.last_price||r?.IDX_I?.['25']?.LTP||0);
       if(nfp>0){S.nf.prev=S.nf.spot||nfp;S.nf.spot=nfp;fetched=true;}
       if(bnp>0){S.bn.prev=S.bn.spot||bnp;S.bn.spot=bnp;fetched=true;}
-    }catch(e2){addLog('var(--amber)','LTP NSE_EQ failed: '+e2.message);}
-  }
-
-  // Format 3: Full response dump to see what Dhan actually returns
-  if(!fetched){
-    try{
-      const d3=await dhan('/v2/marketfeed/ltp','POST',{"NSE_INDEX":["NIFTY 50","NIFTY BANK"]});
-      addLog('var(--blue)','LTP dump: '+JSON.stringify(d3).slice(0,200));
-      const r=d3?.data||d3;
-      // Try to find any price in the response
-      const str=JSON.stringify(r);
-      const prices=str.match(/"(?:last_price|LTP|ltp)"\s*:\s*(\d+\.?\d*)/g);
-      if(prices&&prices.length>=2){
-        const p1=parseFloat(prices[0].match(/[\d.]+$/)[0]);
-        const p2=parseFloat(prices[1].match(/[\d.]+$/)[0]);
-        if(p1>20000){S.nf.spot=p1;S.nf.prev=p1-10;fetched=true;}
-        if(p2>40000){S.bn.spot=p2;S.bn.prev=p2-20;fetched=true;}
-      }
-    }catch(e3){addLog('var(--amber)','LTP all formats failed: '+e3.message);}
+      if(fetched) addLog('var(--blue)','LTP IDX_I fallback: NF='+nfp+' BN='+bnp);
+    }catch(e2){ addLog('var(--amber)','LTP IDX_I failed: '+e2.message); }
   }
 
   if(!fetched){
-    addLog('var(--amber)','Dhan LTP unavailable (market closed). Using last known values.');
-    // Use realistic current market values - update these daily
+    addLog('var(--amber)','Dhan LTP unavailable (market closed or rate limited). Using last known values.');
     if(S.nf.spot===0){S.nf.spot=24188;S.nf.prev=24226;}
     if(S.bn.spot===0){S.bn.spot=55529;S.bn.prev=56047;}
   }
@@ -1415,24 +1405,12 @@ function connectDhanWS(){
 
     WS.socket.onopen = function(){
       WS.connected=true; WS.retries=0;
-      addLog('var(--green)','✅ Dhan WS connected! Sending auth packet…');
-      wsStatus('auth');
-
-      // STEP 1: Send binary auth packet FIRST
-      const authBuf = buildAuthPacket(S.creds.cid, S.creds.tok);
-      WS.socket.send(authBuf);
-      const authBytes = Array.from(new Uint8Array(authBuf.slice(0,Math.min(15,authBuf.byteLength))));
-      addLog('var(--blue)','🔑 Auth packet sent ('+authBuf.byteLength+' bytes): ['+authBytes.join(',')+']');
-
-      // STEP 2: Subscribe will be called only after auth ACK is received (in handleBinaryMsg/handleTextMsg)
-      // Fallback: if no auth ACK in 3s, try subscribing anyway
-      WS._authFallbackTimer = setTimeout(()=>{
-        if(WS.connected && !WS.subscribed){
-          addLog('var(--amber)','⚡ Auth ACK timeout — trying subscribe anyway');
-          WS.authenticated=true;
-          subscribeDhanWS();
-        }
-      }, 3000);
+      addLog('var(--green)','✅ Dhan WS connected! (authType=2 = token in URL, no auth packet needed)');
+      wsStatus('subscribing');
+      // authType=2 means credentials are in the URL — Dhan authenticates automatically
+      // No auth packet needed. Subscribe immediately.
+      WS.authenticated=true;
+      setTimeout(subscribeDhanWS, 500);
 
       // Keepalive ping every 25s
       WS.pingTimer = setInterval(()=>{
@@ -1441,7 +1419,6 @@ function connectDhanWS(){
           const pv = new DataView(pingBuf);
           pv.setUint8(0,44); pv.setUint16(1,3,true);
           WS.socket.send(pingBuf);
-          addLog('var(--text3)','💓 Ping sent');
         }
       },25000);
     };
@@ -1490,33 +1467,33 @@ function handleBinaryMsg(buf){
   if(buf.byteLength<1)return;
   const code = view.getUint8(0);
 
-  // Log first 20 bytes for debugging (only non-tick messages to reduce noise)
-  if(code!==51&&code!==15&&code!==17){
-    const allBytes = Array.from(new Uint8Array(buf.slice(0,Math.min(20,buf.byteLength))));
-    addLog('var(--blue)','📦 BIN code='+code+' len='+buf.byteLength+' bytes=['+allBytes.join(',')+']');
-  }
+  // Always log first 32 bytes — critical for debugging what Dhan actually sends
+  const allBytes = Array.from(new Uint8Array(buf.slice(0,Math.min(32,buf.byteLength))));
+  addLog('var(--blue)','📦 BIN code='+code+' len='+buf.byteLength+' bytes=['+allBytes.join(',')+']');
 
-  // Code 11/12 = auth success
-  if(code===11||code===12){
+  // Code 2 = auth success (Dhan v2 protocol)
+  // Code 11/12 = also auth in some versions
+  if(code===2||code===11||code===12){
     clearTimeout(WS._authFallbackTimer);
     WS.authenticated=true;
-    addLog('var(--green)','🔑 Auth ACK received (code '+code+') — now subscribing…');
+    addLog('var(--green)','🔑 Auth ACK (code '+code+') — subscribing…');
     wsStatus('subscribing');
-    setTimeout(subscribeDhanWS, 300);
+    setTimeout(subscribeDhanWS,300);
     return;
   }
-  // Code 21/22 = subscription ack
-  if(code===21||code===22){
+  // Code 5 = subscription ack (Dhan v2)
+  // Code 21/22 = also sub ack
+  if(code===5||code===21||code===22){
     WS.subscribed=true;
-    addLog('var(--green)','📡 Subscription confirmed (code '+code+') — live ticks will flow');
+    addLog('var(--green)','📡 Sub ACK (code '+code+') — ticks incoming');
     wsStatus('live'); return;
   }
-  // Tick packets: 51=Index ticker, 15=Quote, 17=Depth
-  if(code===51||code===15||code===17){
+  // Tick data: 4=ticker(v2), 51=index ticker, 15=quote, 17=depth
+  if(code===4||code===51||code===15||code===17){
     parseTick(view, buf.byteLength);
     return;
   }
-  // Unknown packet — try as tick if long enough
+  // Unknown — try parse as tick anyway if long enough
   if(buf.byteLength>=12){
     parseTick(view, buf.byteLength);
   }
@@ -1565,80 +1542,87 @@ function handleTextMsg(raw){
 }
 
 // ── SUBSCRIBE ──
+// Dhan WebSocket subscribe packet (Request Code 21):
+// Byte 0:    21 (subscribe)
+// Bytes 1-2: total length uint16 LE
+// Per instrument (27 bytes each):
+//   Bytes 0-1:  Exchange Segment uint16 LE
+//     0 = IDX_I (indices like NIFTY, BANKNIFTY)
+//     1 = NSE_EQ, 2 = NSE_FNO, 3 = NSE_CURR, 6 = BSE_EQ
+//   Bytes 2-26: Security ID as 25-byte null-padded ASCII
+// Security IDs: NIFTY=13, BANKNIFTY=25 (Dhan internal IDs)
 function subscribeDhanWS(){
-  if(!WS.socket||WS.socket.readyState!==1)return;
+  if(!WS.socket||WS.socket.readyState!==1){
+    addLog('var(--red)','Subscribe failed — WS not ready (state='+( WS.socket?WS.socket.readyState:'null')+')');
+    return;
+  }
 
-  // Subscribe using BINARY packet
-  // IDX_I segment code = 0, Nifty=13, BankNifty=25
-  const subBuf = buildSubPacket([
-    {exchCode:0, secId:'13'},   // Nifty 50 on IDX_I
-    {exchCode:0, secId:'25'},   // BankNifty on IDX_I
-  ]);
-  WS.socket.send(subBuf);
-  const subBytes = Array.from(new Uint8Array(subBuf.slice(0,Math.min(15,subBuf.byteLength))));
-  addLog('var(--green)','📡 Subscribe sent ('+subBuf.byteLength+' bytes): '+subBytes.join(','));
+  const instruments=[
+    {exchCode:0, secId:'13'},   // IDX_I, NIFTY 50
+    {exchCode:0, secId:'25'},   // IDX_I, BANKNIFTY
+  ];
 
-  // Also try NSE_INDEX segment (code 13) as fallback
-  setTimeout(()=>{
-    if(WS.socket&&WS.socket.readyState===1){
-      const subBuf2 = buildSubPacket([
-        {exchCode:13, secId:'13'},
-        {exchCode:13, secId:'25'},
-      ]);
-      WS.socket.send(subBuf2);
-      addLog('var(--blue)','📡 Also sent NSE_INDEX segment subscribe');
-    }
-  },1000);
+  const enc = new TextEncoder();
+  const perInst = 27; // 2 exch + 25 secId
+  const buf = new ArrayBuffer(3 + instruments.length * perInst);
+  const view = new DataView(buf);
+  view.setUint8(0, 21);                                    // Request code 21 = Subscribe
+  view.setUint16(1, buf.byteLength, true);                 // Total packet length LE
+  let off = 3;
+  for(const {exchCode, secId} of instruments){
+    view.setUint16(off, exchCode, true);
+    const padded = secId.padEnd(25, '\0');
+    const bytes = enc.encode(padded);
+    new Uint8Array(buf).set(bytes.slice(0,25), off+2);
+    off += 27;
+  }
+
+  WS.socket.send(buf);
+  const preview = Array.from(new Uint8Array(buf));
+  addLog('var(--green)','📡 Subscribe sent ('+buf.byteLength+' bytes): ['+preview.join(',')+']');
+  addLog('var(--blue)','📡 Subscribed: IDX_I/13(NIFTY) + IDX_I/25(BANKNIFTY) — waiting for ticks…');
+  wsStatus('live');
+  WS.subscribed = true;
 }
 
 // ── PARSE BINARY TICK ──
-// Dhan index tick (code 51) packet layout — based on DhanHQ Python SDK:
-// Byte 0:     Feed Response Type (51 for index)
-// Bytes 1-2:  Message Length uint16 LE
-// Bytes 3-4:  Exchange Segment uint16 LE  (0 = IDX_I)
-// Bytes 5-28: Security ID as 25-byte padded ASCII string (null/space terminated)
-// Bytes 29-32: LTP as float32 LE
+// Dhan sends index ticks in this format (verified from Python SDK source):
+// Response code 4 (v2 ticker) or 51 (v1 index ticker):
+// [0]     response_code  uint8
+// [1-2]   message_length uint16 LE
+// [3-4]   exchange_segment uint16 LE  (0=IDX_I)
+// [5-28]  security_id    25 bytes padded ASCII  e.g. "13       " = NIFTY
+// [29-32] LTP            float32 LE
+// [33-36] LTQ            uint16 LE
+// etc.
 function parseTick(view, len){
   try{
-    if(len < 33) return; // too short for index tick
+    if(len < 8) return;
+    const code = view.getUint8(0);
 
-    // Primary parse: IDX_I index format (code 51)
-    // Security ID: bytes 5..29 as ASCII string
-    const secBytes = new Uint8Array(view.buffer, view.byteOffset+5, Math.min(24, len-5));
-    const secStr = new TextDecoder().decode(secBytes).replace(/\0/g,'').trim();
-    const secId = parseInt(secStr) || 0;
-
-    // LTP: float32 at offset 29
-    let ltp = 0;
-    if(len >= 33) ltp = view.getFloat32(29, true); // little-endian
-
-    // Validate LTP range — do NOT multiply by 100; Dhan sends actual price
-    if(secId===13 && ltp>20000 && ltp<30000){
-      addLog('var(--green)',`📈 Tick NF: ${ltp.toFixed(2)} (secId=${secId})`);
-      processTick('nf', ltp); return;
-    }
-    if(secId===25 && ltp>40000 && ltp<75000){
-      addLog('var(--green)',`📈 Tick BN: ${ltp.toFixed(2)} (secId=${secId})`);
-      processTick('bn', ltp); return;
+    // Try primary layout: secId string at 5, LTP float32 at 29
+    if(len >= 33){
+      const secRaw = new Uint8Array(view.buffer, view.byteOffset+5, Math.min(24,len-5));
+      const secStr = new TextDecoder().decode(secRaw).replace(/[\0\s]/g,'').trim();
+      const secId  = parseInt(secStr);
+      const ltp    = view.getFloat32(29, true);
+      addLog('var(--text3)',`parseTick code=${code} len=${len} secStr="${secStr}" secId=${secId} ltp=${ltp.toFixed(2)}`);
+      if(secId===13 && ltp>20000 && ltp<30000){ processTick('nf',ltp); return; }
+      if(secId===25 && ltp>40000 && ltp<75000){ processTick('bn',ltp); return; }
     }
 
-    // Fallback: try int32 secId at offset 4, float32 LTP at various offsets
-    const altPatterns=[
-      [4,true,8],[4,true,12],[4,true,29],[3,false,29]
+    // Fallback patterns — try different offsets
+    const patterns=[
+      [3,25,28],[4,25,29],[5,25,30],[3,4,7],[4,4,8]
     ];
-    for(const[sOff,sIsInt,lOff] of altPatterns){
-      if(sOff+4>len||lOff+4>len) continue;
-      let sid=0;
-      if(sIsInt) sid=view.getInt32(sOff,true);
-      else{ const b=new Uint8Array(view.buffer,view.byteOffset+sOff,Math.min(25,len-sOff)); sid=parseInt(new TextDecoder().decode(b).trim())||0; }
-      const p=view.getFloat32(lOff,true);
-      if(sid===13&&p>20000&&p<30000){ addLog('var(--green)',`📈 Tick NF (alt): ${p.toFixed(2)}`); processTick('nf',p); return; }
-      if(sid===25&&p>40000&&p<75000){ addLog('var(--green)',`📈 Tick BN (alt): ${p.toFixed(2)}`); processTick('bn',p); return; }
-    }
-    // Dump bytes for debugging (only first few unknown packets)
-    if((WS._unknownTickCount=(WS._unknownTickCount||0)+1) <= 5){
-      const bytes=Array.from(new Uint8Array(view.buffer,view.byteOffset,Math.min(32,len)));
-      addLog('var(--text3)','🔍 Unknown tick bytes['+len+']: '+bytes.join(','));
+    for(const[secOff,secLen,ltpOff] of patterns){
+      if(secOff+secLen>len||ltpOff+4>len) continue;
+      const secRaw=new Uint8Array(view.buffer,view.byteOffset+secOff,Math.min(secLen,len-secOff));
+      const secId=parseInt(new TextDecoder().decode(secRaw).replace(/[\0\s]/g,''))||
+                  view.getInt32(secOff,true);
+      const ltp=view.getFloat32(ltpOff,true);
+      if(secId===13&&ltp>20000&&ltp<30000){ addLog('var(--green)',`📈 NF tick (alt off ${ltpOff}): ${ltp.toFixed(2)}`); processTick('nf',ltp); return; }
+      if(secId===25&&ltp>40000&&ltp<75000){ addLog('var(--green)',`📈 BN tick (alt off ${ltpOff}): ${ltp.toFixed(2)}`); processTick('bn',ltp); return; }
     }
   }catch(e){ addLog('var(--text3)','parseTick err: '+e.message); }
 }
@@ -1675,7 +1659,27 @@ function processTick(key, ltp){
   if(S.nf.active||S.bn.active) updatePnL();
 }
 
-// ── STATUS ──
+// ── WS DIAGNOSTICS ──
+function diagWS(){
+  addLog('var(--purple)','🔍 === WS DIAGNOSTICS ===');
+  addLog('var(--purple)','Socket state: '+(WS.socket?['CONNECTING','OPEN','CLOSING','CLOSED'][WS.socket.readyState]:'null'));
+  addLog('var(--purple)','connected='+WS.connected+' auth='+WS.authenticated+' subscribed='+WS.subscribed);
+  addLog('var(--purple)','Retries: '+WS.retries+' · Ticks received: '+WS.tickCount);
+  addLog('var(--purple)','Last tick: '+(WS.lastTick?WS.lastTick.toLocaleTimeString('en-IN'):'never'));
+  addLog('var(--purple)','Creds: clientId='+S.creds.cid.slice(0,6)+'*** token=***'+S.creds.tok.slice(-6));
+  addLog('var(--purple)','NF spot='+S.nf.spot+' BN spot='+S.bn.spot);
+  // Force reconnect with verbose mode
+  if(WS.socket&&WS.socket.readyState===1){
+    addLog('var(--green)','WS is OPEN — sending test subscribe now');
+    subscribeDhanWS();
+  } else {
+    addLog('var(--amber)','WS not open — reconnecting…');
+    disconnectDhanWS();
+    setTimeout(connectDhanWS,500);
+  }
+}
+
+// ── DISCONNECT ──
 function wsStatus(s){
   const lbl=el('ws-status-lbl'), pill=el('ws-pill');
   const map={
